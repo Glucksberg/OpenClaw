@@ -49,6 +49,24 @@ describe("decideSoulEvil", () => {
     expect(result.reason).toBe("purge");
   });
 
+  it("prefers purge window over random chance", () => {
+    const result = decideSoulEvil({
+      config: {
+        agent: {
+          soulEvil: {
+            chance: 0,
+            purge: { at: "00:00", duration: "10m" },
+          },
+          userTimezone: "UTC",
+        },
+      },
+      now: new Date("2026-01-01T00:05:00Z"),
+      random: () => 0,
+    });
+    expect(result.useEvil).toBe(true);
+    expect(result.reason).toBe("purge");
+  });
+
   it("skips purge window when outside duration", () => {
     const result = decideSoulEvil({
       config: {
