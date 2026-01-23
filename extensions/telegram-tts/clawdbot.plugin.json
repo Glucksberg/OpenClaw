@@ -42,6 +42,11 @@
       "label": "Max Text Length",
       "help": "Maximum characters to convert to speech",
       "advanced": true
+    },
+    "timeoutMs": {
+      "label": "Request Timeout (ms)",
+      "help": "Maximum time to wait for TTS API response (default: 30000)",
+      "advanced": true
     }
   },
   "configSchema": {
@@ -100,6 +105,12 @@
         "type": "integer",
         "minimum": 1,
         "default": 4000
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 30000
       }
     }
   }

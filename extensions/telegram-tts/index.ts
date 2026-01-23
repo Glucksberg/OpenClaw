@@ -5,20 +5,22 @@
  * No external CLI dependencies.
  *
  * Features:
- * - /tts_on, /tts_off commands to toggle TTS mode
- * - /audio command for one-shot voice responses
  * - speak tool for programmatic TTS
  * - Multi-provider support (ElevenLabs, OpenAI)
+ * - RPC methods for status and control
+ *
+ * Note: Slash commands (/tts_on, /tts_off, /audio) should be configured
+ * via Telegram customCommands and handled by the agent workspace.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, createWriteStream } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
 import type { PluginApi } from "clawdbot";
 
 const PLUGIN_ID = "telegram-tts";
+const DEFAULT_TIMEOUT_MS = 30000;
+const TEMP_FILE_CLEANUP_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
 // =============================================================================
 // Types
@@ -39,6 +41,7 @@ interface TtsConfig {
   };
   prefsPath?: string;
   maxTextLength?: number;
+  timeoutMs?: number;
 }
 
 interface UserPreferences {
@@ -51,6 +54,26 @@ interface TtsResult {
   success: boolean;
   audioPath?: string;
   error?: string;
+}
+
+// =============================================================================
+// Validation
+// =============================================================================
+
+/**
+ * Validates ElevenLabs voiceId format to prevent URL injection.
+ * Voice IDs are alphanumeric strings, typically 20 characters.
+ */
+function isValidVoiceId(voiceId: string): boolean {
+  return /^[a-zA-Z0-9]{10,40}$/.test(voiceId);
+}
+
+/**
+ * Validates OpenAI voice name.
+ */
+function isValidOpenAIVoice(voice: string): boolean {
+  const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+  return validVoices.includes(voice);
 }
 
 // =============================================================================
@@ -103,6 +126,24 @@ function getApiKey(config: TtsConfig, provider: string): string | undefined {
 }
 
 // =============================================================================
+// Temp File Cleanup
+// =============================================================================
+
+/**
+ * Schedules cleanup of a temp directory after a delay.
+ * This ensures the file is consumed before deletion.
+ */
+function scheduleCleanup(tempDir: string, delayMs: number = TEMP_FILE_CLEANUP_DELAY_MS): void {
+  setTimeout(() => {
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }, delayMs);
+}
+
+// =============================================================================
 // TTS Providers
 // =============================================================================
 
@@ -110,64 +151,92 @@ async function elevenLabsTTS(
   text: string,
   apiKey: string,
   voiceId: string = "pMsXgVXv3BLzUgSXRplE",
-  modelId: string = "eleven_multilingual_v2"
+  modelId: string = "eleven_multilingual_v2",
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<Buffer> {
-  const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "audio/mpeg",
-      },
-      body: JSON.stringify({
-        text,
-        model_id: modelId,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.0,
-          use_speaker_boost: true,
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`ElevenLabs API error (${response.status}): ${error}`);
+  // Validate voiceId to prevent URL injection
+  if (!isValidVoiceId(voiceId)) {
+    throw new Error(`Invalid voiceId format`);
   }
 
-  return Buffer.from(await response.arrayBuffer());
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text,
+          model_id: modelId,
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    if (!response.ok) {
+      // Don't leak API error details to users
+      throw new Error(`ElevenLabs API error (${response.status})`);
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function openaiTTS(
   text: string,
   apiKey: string,
   model: string = "tts-1",
-  voice: string = "alloy"
+  voice: string = "alloy",
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<Buffer> {
-  const response = await fetch("https://api.openai.com/v1/audio/speech", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      input: text,
-      voice,
-      response_format: "mp3",
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI TTS API error (${response.status}): ${error}`);
+  // Validate voice
+  if (!isValidOpenAIVoice(voice)) {
+    throw new Error(`Invalid voice: ${voice}`);
   }
 
-  return Buffer.from(await response.arrayBuffer());
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        input: text,
+        voice,
+        response_format: "mp3",
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      // Don't leak API error details to users
+      throw new Error(`OpenAI TTS API error (${response.status})`);
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // =============================================================================
@@ -177,11 +246,12 @@ async function openaiTTS(
 async function textToSpeech(text: string, config: TtsConfig): Promise<TtsResult> {
   const provider = config.provider || "elevenlabs";
   const apiKey = getApiKey(config, provider);
+  const timeoutMs = config.timeoutMs || DEFAULT_TIMEOUT_MS;
 
   if (!apiKey) {
     return {
       success: false,
-      error: `No API key found for provider: ${provider}. Set ${provider === "elevenlabs" ? "ELEVENLABS_API_KEY" : "OPENAI_API_KEY"} environment variable.`,
+      error: `No API key configured for ${provider}`,
     };
   }
 
@@ -201,14 +271,16 @@ async function textToSpeech(text: string, config: TtsConfig): Promise<TtsResult>
         text,
         apiKey,
         config.elevenlabs?.voiceId,
-        config.elevenlabs?.modelId
+        config.elevenlabs?.modelId,
+        timeoutMs
       );
     } else if (provider === "openai") {
       audioBuffer = await openaiTTS(
         text,
         apiKey,
         config.openai?.model,
-        config.openai?.voice
+        config.openai?.voice,
+        timeoutMs
       );
     } else {
       return { success: false, error: `Unknown provider: ${provider}` };
@@ -219,11 +291,18 @@ async function textToSpeech(text: string, config: TtsConfig): Promise<TtsResult>
     const audioPath = join(tempDir, `voice-${Date.now()}.mp3`);
     writeFileSync(audioPath, audioBuffer);
 
+    // Schedule cleanup after delay (file should be consumed by then)
+    scheduleCleanup(tempDir);
+
     return { success: true, audioPath };
   } catch (err) {
+    const error = err as Error;
+    if (error.name === "AbortError") {
+      return { success: false, error: "TTS request timed out" };
+    }
     return {
       success: false,
-      error: `TTS conversion failed: ${(err as Error).message}`,
+      error: `TTS conversion failed: ${error.message}`,
     };
   }
 }
@@ -234,11 +313,17 @@ async function textToSpeech(text: string, config: TtsConfig): Promise<TtsResult>
 
 export default function register(api: PluginApi) {
   const log = api.logger;
-  const config = (api.pluginConfig || {}) as TtsConfig;
+  const config: TtsConfig = {
+    enabled: false,
+    provider: "elevenlabs",
+    maxTextLength: 4000,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    ...(api.pluginConfig || {}),
+  };
   const prefsPath = getPrefsPath(config);
 
   log.info(`[${PLUGIN_ID}] Registering plugin...`);
-  log.info(`[${PLUGIN_ID}] Provider: ${config.provider || "elevenlabs"}`);
+  log.info(`[${PLUGIN_ID}] Provider: ${config.provider}`);
   log.info(`[${PLUGIN_ID}] Preferences: ${prefsPath}`);
 
   // ===========================================================================
@@ -263,13 +348,14 @@ The tool generates an MP3 file and returns the path for delivery.`,
       },
       required: ["text"],
     },
-    execute: async (_id: string, params: { text: string }) => {
-      const { text } = params;
-      log.info(`[${PLUGIN_ID}] speak() called, length: ${text?.length || 0}`);
-
-      if (!text) {
-        return { content: [{ type: "text", text: "Error: No text provided" }] };
+    execute: async (_id: string, params: { text?: unknown }) => {
+      // Validate text parameter
+      if (typeof params?.text !== "string" || params.text.length === 0) {
+        return { content: [{ type: "text", text: "Error: Invalid or missing text parameter" }] };
       }
+
+      const text = params.text;
+      log.info(`[${PLUGIN_ID}] speak() called, length: ${text.length}`);
 
       const result = await textToSpeech(text, config);
 
@@ -305,7 +391,7 @@ The tool generates an MP3 file and returns the path for delivery.`,
   // tts.status - Check if TTS is enabled
   api.registerGatewayMethod("tts.status", async () => ({
     enabled: isTtsEnabled(prefsPath),
-    provider: config.provider || "elevenlabs",
+    provider: config.provider,
     prefsPath,
     hasApiKey: !!getApiKey(config, config.provider || "elevenlabs"),
   }));
@@ -325,9 +411,10 @@ The tool generates an MP3 file and returns the path for delivery.`,
   });
 
   // tts.convert - Convert text to audio (returns path)
-  api.registerGatewayMethod("tts.convert", async (params: { text: string }) => {
-    if (!params.text) {
-      return { ok: false, error: "No text provided" };
+  api.registerGatewayMethod("tts.convert", async (params: { text?: unknown }) => {
+    // Validate text parameter
+    if (typeof params?.text !== "string" || params.text.length === 0) {
+      return { ok: false, error: "Invalid or missing 'text' parameter" };
     }
     const result = await textToSpeech(params.text, config);
     if (result.success) {
@@ -353,7 +440,7 @@ The tool generates an MP3 file and returns the path for delivery.`,
         voices: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
       },
     ],
-    active: config.provider || "elevenlabs",
+    active: config.provider,
   }));
 
   // ===========================================================================
@@ -380,5 +467,5 @@ export const meta = {
   id: PLUGIN_ID,
   name: "Telegram TTS",
   description: "Text-to-speech for chat responses using ElevenLabs or OpenAI",
-  version: "0.2.0",
+  version: "0.3.0",
 };
