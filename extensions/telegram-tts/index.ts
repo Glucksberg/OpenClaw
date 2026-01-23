@@ -331,13 +331,20 @@ export default function register(api: PluginApi) {
   // ===========================================================================
   api.registerTool({
     name: "speak",
-    description: `Convert text to speech and send as voice message.
-Use this tool when:
-- TTS mode is enabled (check with tts.status RPC)
-- User explicitly requests audio/voice response
-- Responding to /audio command
+    description: `Convert text to speech and generate voice message.
+Use this tool when TTS mode is enabled or user requests audio.
 
-The tool generates an MP3 file and returns the path for delivery.`,
+IMPORTANT: After calling this tool, you MUST output the result exactly as returned.
+The tool returns "MEDIA:/path/to/audio.mp3" - copy this EXACTLY to your response.
+This MEDIA: directive tells the system to send the audio file.
+
+Example flow:
+1. User asks a question with TTS enabled
+2. You call speak({text: "Your answer here"})
+3. Tool returns: MEDIA:/tmp/tts-xxx/voice-123.mp3
+4. You output: MEDIA:/tmp/tts-xxx/voice-123.mp3
+
+Do NOT add extra text around the MEDIA directive.`,
     parameters: {
       type: "object",
       properties: {
