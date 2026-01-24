@@ -1042,4 +1042,5 @@ export const _test = {
   isValidOpenAIVoice,
   isValidOpenAIModel,
   OPENAI_TTS_MODELS,
+  summarizeText,
 };
