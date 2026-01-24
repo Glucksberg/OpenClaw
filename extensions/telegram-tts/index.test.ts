@@ -5,7 +5,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { _test, meta } from "./index.js";
 
-const { isValidVoiceId, isValidOpenAIVoice, isValidOpenAIModel, OPENAI_TTS_MODELS, summarizeText } = _test;
+const { isValidVoiceId, isValidOpenAIVoice, isValidOpenAIModel, OPENAI_TTS_MODELS, summarizeText, isSagAvailable } = _test;
 
 describe("telegram-tts", () => {
   describe("meta", () => {
@@ -89,6 +89,19 @@ describe("telegram-tts", () => {
     it("should be a non-empty array", () => {
       expect(Array.isArray(OPENAI_TTS_MODELS)).toBe(true);
       expect(OPENAI_TTS_MODELS.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("isSagAvailable", () => {
+    it("should return a boolean", () => {
+      const result = isSagAvailable();
+      expect(typeof result).toBe("boolean");
+    });
+
+    it("should cache the result (returns same value on subsequent calls)", () => {
+      const first = isSagAvailable();
+      const second = isSagAvailable();
+      expect(first).toBe(second);
     });
   });
 

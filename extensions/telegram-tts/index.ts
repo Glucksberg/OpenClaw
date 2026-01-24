@@ -16,6 +16,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, renameSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { spawn, execSync } from "child_process";
 import type { PluginApi } from "clawdbot";
 
 const PLUGIN_ID = "telegram-tts";
@@ -329,6 +330,71 @@ function scheduleCleanup(tempDir: string, delayMs: number = TEMP_FILE_CLEANUP_DE
 }
 
 // =============================================================================
+// sag CLI Integration (ElevenLabs via CLI)
+// =============================================================================
+
+/**
+ * Cache for sag CLI availability check.
+ * Null means not checked yet, boolean is the result.
+ */
+let sagAvailabilityCache: boolean | null = null;
+
+/**
+ * Checks if sag CLI is available on the system.
+ * Result is cached to avoid repeated shell calls.
+ */
+function isSagAvailable(): boolean {
+  if (sagAvailabilityCache !== null) {
+    return sagAvailabilityCache;
+  }
+  try {
+    execSync("which sag", { stdio: "ignore" });
+    sagAvailabilityCache = true;
+  } catch {
+    sagAvailabilityCache = false;
+  }
+  return sagAvailabilityCache;
+}
+
+/**
+ * Uses sag CLI for ElevenLabs TTS.
+ * sag CLI: https://sag.sh (brew install steipete/tap/sag)
+ * Requires ELEVENLABS_API_KEY env var.
+ */
+async function sagTTS(
+  text: string,
+  voiceId: string = "pMsXgVXv3BLzUgSXRplE",
+  outputPath: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Use spawn with args array to avoid shell injection
+    const args = ["-v", voiceId, "-o", outputPath, text];
+    const child = spawn("sag", args, {
+      timeout: timeoutMs,
+      stdio: ["ignore", "ignore", "pipe"], // capture stderr for errors
+    });
+
+    let stderr = "";
+    child.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    child.on("error", (err) => {
+      reject(new Error(`sag CLI error: ${err.message}`));
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`sag failed (exit ${code}): ${stderr.trim() || "unknown error"}`));
+      }
+    });
+  });
+}
+
+// =============================================================================
 // TTS Providers
 // =============================================================================
 
@@ -463,6 +529,35 @@ async function textToSpeech(text: string, config: TtsConfig, prefsPath?: string)
       let audioBuffer: Buffer;
 
       if (provider === "elevenlabs") {
+        // Try sag CLI first (if available), fall back to direct API
+        if (isSagAvailable()) {
+          // sag reads ELEVENLABS_API_KEY from env, so we just need it to exist
+          const tempDir = mkdtempSync(join(tmpdir(), "tts-sag-"));
+          const sagOutputPath = join(tempDir, `voice-${Date.now()}.mp3`);
+          try {
+            await sagTTS(
+              text,
+              config.elevenlabs?.voiceId || "pMsXgVXv3BLzUgSXRplE",
+              sagOutputPath,
+              timeoutMs
+            );
+            // sag succeeded, schedule cleanup and return early
+            const latencyMs = Date.now() - providerStartTime;
+            scheduleCleanup(tempDir);
+            return { success: true, audioPath: sagOutputPath, latencyMs, provider: "elevenlabs (sag)" };
+          } catch (sagErr) {
+            // sag failed, clean up temp dir and fall through to direct API
+            try {
+              rmSync(tempDir, { recursive: true, force: true });
+            } catch {
+              // ignore cleanup errors
+            }
+            // Log sag failure but continue to try direct API
+            const sagError = sagErr as Error;
+            lastError = `sag: ${sagError.message}`;
+          }
+        }
+        // Direct ElevenLabs API call (fallback when sag unavailable or failed)
         audioBuffer = await elevenLabsTTS(
           text,
           apiKey,
@@ -844,10 +939,12 @@ Do NOT add extra text around the MEDIA directive.`,
       const summarizationEnabled = isSummarizationEnabled(prefsPath);
       const hasKey = !!getApiKey(config, activeProvider);
 
+      const sagAvailable = isSagAvailable();
       let statusLines = [
         `📊 **TTS Status**\n`,
         `State: ${enabled ? "✅ Enabled" : "❌ Disabled"}`,
         `Provider: ${activeProvider} (API Key: ${hasKey ? "✅" : "❌"})`,
+        `sag CLI: ${sagAvailable ? "✅ available" : "❌ not found"}${sagAvailable && activeProvider === "elevenlabs" ? " (in use)" : ""}`,
         `Text limit: ${maxLength} characters`,
         `Auto-summary: ${summarizationEnabled ? "✅ Enabled" : "❌ Disabled"}`,
       ];
@@ -1008,8 +1105,13 @@ Do NOT add extra text around the MEDIA directive.`,
   const userProvider = getTtsProvider(prefsPath);
   const activeProvider = userProvider || config.provider || "elevenlabs";
   const hasKey = !!getApiKey(config, activeProvider);
+  const sagAvailable = isSagAvailable();
 
-  log.info(`[${PLUGIN_ID}] Ready. TTS: ${ttsEnabled ? "ON" : "OFF"}, Provider: ${activeProvider}, API Key: ${hasKey ? "OK" : "MISSING"}`);
+  log.info(`[${PLUGIN_ID}] Ready. TTS: ${ttsEnabled ? "ON" : "OFF"}, Provider: ${activeProvider}, API Key: ${hasKey ? "OK" : "MISSING"}, sag CLI: ${sagAvailable ? "available" : "not found"}`);
+
+  if (sagAvailable && activeProvider === "elevenlabs") {
+    log.info(`[${PLUGIN_ID}] Using sag CLI for ElevenLabs TTS (with direct API fallback)`);
+  }
 
   if (!hasKey) {
     log.warn(
@@ -1039,4 +1141,5 @@ export const _test = {
   isValidOpenAIModel,
   OPENAI_TTS_MODELS,
   summarizeText,
+  isSagAvailable,
 };
