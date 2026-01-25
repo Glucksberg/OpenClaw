@@ -3,6 +3,7 @@ import { repeat } from "lit/directives/repeat.js";
 import type { SessionsListResult } from "../types";
 import type { ChatQueueItem } from "../ui-types";
 import type { ChatItem, MessageGroup } from "../types/chat-types";
+import { icons } from "../icons";
 import {
   normalizeMessage,
   normalizeRoleForGrouping,
@@ -69,34 +70,35 @@ const COMPACTION_TOAST_DURATION_MS = 5000;
 
 function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {
   if (!status) return nothing;
-  
+
   // Show "compacting..." while active
   if (status.active) {
     return html`
       <div class="callout info compaction-indicator compaction-indicator--active">
-        🧹 Compacting context...
+        ${icons.loader} Compacting context...
       </div>
     `;
   }
-  
+
   // Show "compaction complete" briefly after completion
   if (status.completedAt) {
     const elapsed = Date.now() - status.completedAt;
     if (elapsed < COMPACTION_TOAST_DURATION_MS) {
       return html`
         <div class="callout success compaction-indicator compaction-indicator--complete">
-          🧹 Context compacted
+          ${icons.check} Context compacted
         </div>
       `;
     }
   }
-  
+
   return nothing;
 }
 
 export function renderChat(props: ChatProps) {
   const canCompose = props.connected;
   const isBusy = props.sending || props.stream !== null;
+  const canAbort = Boolean(props.canAbort && props.onAbort);
   const activeSession = props.sessions?.sessions?.find(
     (row) => row.key === props.sessionKey,
   );
@@ -170,7 +172,7 @@ export function renderChat(props: ChatProps) {
               aria-label="Exit focus mode"
               title="Exit focus mode"
             >
-              ✕
+              ${icons.x}
             </button>
           `
         : nothing}
@@ -222,7 +224,7 @@ export function renderChat(props: ChatProps) {
                         aria-label="Remove queued message"
                         @click=${() => props.onQueueRemove(item.id)}
                       >
-                        ✕
+                        ${icons.x}
                       </button>
                     </div>
                   `,
@@ -254,17 +256,17 @@ export function renderChat(props: ChatProps) {
         <div class="chat-compose__actions">
           <button
             class="btn"
-            ?disabled=${!props.connected || props.sending}
-            @click=${props.onNewSession}
+            ?disabled=${!props.connected || (!canAbort && props.sending)}
+            @click=${canAbort ? props.onAbort : props.onNewSession}
           >
-            New session
+            ${canAbort ? "Stop" : "New session"}
           </button>
           <button
             class="btn primary"
             ?disabled=${!props.connected}
             @click=${props.onSend}
           >
-            ${isBusy ? "Queue" : "Send"}
+            ${isBusy ? "Queue" : "Send"}<kbd class="btn-kbd">↵</kbd>
           </button>
         </div>
       </div>
