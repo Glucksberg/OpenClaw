@@ -282,7 +282,8 @@ function buildChatCommands(): ChatCommandDefinition[] {
           name: "action",
           description: "on | off | status | provider | limit | summary | audio | help",
           type: "string",
-          choices: ["on", "off", "status", "provider", "limit", "summary", "audio", "help"],
+          // Menu choices exclude "audio" (requires text arg) and "help" (just shows usage)
+          choices: ["on", "off", "status", "provider", "limit", "summary"],
         },
         {
           name: "value",
