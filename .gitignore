@@ -69,3 +69,9 @@ USER.md
 
 # local tooling
 .serena/
+
+# Agent workspaces - ignore logs and sensitive files
+agents/*/monitors/logs/
+agents/*/.user-preferences.json
+agents/*/memory/
+agents/*/auth-profiles.json
