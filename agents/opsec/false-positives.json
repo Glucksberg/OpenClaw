@@ -1,0 +1,53 @@
+{
+  "false_positives": {
+    "SYNTAX-NOW-TEMP": {
+      "id": "SYNTAX-NOW-TEMP",
+      "name": "SyntaxError identifier now declared temp",
+      "description": "Erro temporário de redeclaração da variável now - geralmente causado por hot reload, cache de módulos ou desenvolvimento dinâmico",
+      "pattern": "identifier.*now.*already.*declared",
+      "severity": "low",
+      "auto_resolve": true,
+      "count": 2,
+      "first_seen": "2026-01-28T19:05:00Z",
+      "last_seen": "2026-01-28T19:28:38.120Z",
+      "affected_processes": [
+        "cloudfarm"
+      ],
+      "user_triggers": [
+        "hot_reload",
+        "module_cache",
+        "dev_operations"
+      ],
+      "mitigation": "pm2 restart cloudfarm",
+      "notes": "Código sintaticamente correto. Problema resolve automaticamente.",
+      "history": [
+        {
+          "timestamp": "2026-01-28T19:05:00Z",
+          "reported_by": "health_check",
+          "context": "CloudFarm backend syntax check",
+          "resolved": true,
+          "resolution_method": "auto_clear"
+        },
+        {
+          "timestamp": "2026-01-28T19:28:38.121Z",
+          "reported_by": "auto_detection",
+          "context": "Detected during automated monitoring",
+          "resolved": true,
+          "resolution_method": "manual"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "created": "2026-01-28T19:12:00Z",
+    "last_updated": "2026-01-28T19:28:38.121Z",
+    "total_entries": 1,
+    "version": "1.1"
+  },
+  "config": {
+    "auto_classify_threshold": 3,
+    "max_history_entries": 100,
+    "cooldown_minutes": 15,
+    "recent_errors_window_minutes": 15
+  }
+}
