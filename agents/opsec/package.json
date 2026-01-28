@@ -1,0 +1,29 @@
+{
+  "name": "opsec-false-positives",
+  "version": "1.1.0",
+  "description": "Sistema de Gestão de Falsos Positivos para OpSec CloudFarm",
+  "main": "scripts/false-positive-manager.cjs",
+  "scripts": {
+    "test": "node tests/false-positive-manager.test.js",
+    "test:watch": "nodemon --exec 'npm test' --watch scripts --watch tests",
+    "check": "scripts/check-false-positive.sh",
+    "report": "node scripts/false-positive-manager.cjs report",
+    "stats": "node scripts/false-positive-manager.cjs stats",
+    "cleanup": "node scripts/false-positive-manager.cjs cleanup",
+    "export": "node scripts/false-positive-manager.cjs export > exports/training-data-$(date +%Y%m%d).json"
+  },
+  "keywords": [
+    "opsec",
+    "false-positives",
+    "monitoring",
+    "cloudfarm",
+    "error-detection"
+  ],
+  "author": "OpSec Agent",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}

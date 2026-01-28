@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "profiles": {
+    "anthropic:claude-cli": {
+      "type": "oauth",
+      "provider": "anthropic",
+      "access": "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",
+      "refresh": "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",
+      "expires": 1769568043781
+    },
+    "openai-codex:codex-cli": {
+      "type": "oauth",
+      "provider": "openai-codex",
+      "access": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE5MzQ0ZTY1LWJiYzktNDRkMS1hOWQwLWY5NTdiMDc5YmQwZSIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS92MSJdLCJjbGllbnRfaWQiOiJhcHBfRU1vYW1FRVo3M2YwQ2tYYVhwN2hyYW5uIiwiZXhwIjoxNzY5OTEzMjIxLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZGI3OWMzMDQtNzY5MC00NTJlLWE2ZmMtYWQ5NDE5NzYwOTM5IiwiY2hhdGdwdF9hY2NvdW50X3VzZXJfaWQiOiJ1c2VyLWdhaVl3SkFqdklaalJNS1ZSN0hwdUgwZ19fZGI3OWMzMDQtNzY5MC00NTJlLWE2ZmMtYWQ5NDE5NzYwOTM5IiwiY2hhdGdwdF9jb21wdXRlX3Jlc2lkZW5jeSI6Im5vX2NvbnN0cmFpbnQiLCJjaGF0Z3B0X3BsYW5fdHlwZSI6InBsdXMiLCJjaGF0Z3B0X3VzZXJfaWQiOiJ1c2VyLWdhaVl3SkFqdklaalJNS1ZSN0hwdUgwZyIsInVzZXJfaWQiOiJ1c2VyLWdhaVl3SkFqdklaalJNS1ZSN0hwdUgwZyJ9LCJodHRwczovL2FwaS5vcGVuYWkuY29tL21mYSI6eyJyZXF1aXJlZCI6InllcyJ9LCJodHRwczovL2FwaS5vcGVuYWkuY29tL3Byb2ZpbGUiOnsiZW1haWwiOiJtYXJrdXNjb250YXN1bEBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZX0sImlhdCI6MTc2OTA0OTIyMCwiaXNzIjoiaHR0cHM6Ly9hdXRoLm9wZW5haS5jb20iLCJqdGkiOiI4MTI1ZWIyYS0zMDNlLTRiYTctYmIzMS1jOTVjNGJhMTVhYmIiLCJuYmYiOjE3NjkwNDkyMjAsInB3ZF9hdXRoX3RpbWUiOjE3NjkwNDkyMTk0ODAsInNjcCI6WyJvcGVuaWQiLCJwcm9maWxlIiwiZW1haWwiLCJvZmZsaW5lX2FjY2VzcyJdLCJzZXNzaW9uX2lkIjoiYXV0aHNlc3NfbVRrUGtORG1HS295aHhNaHZ3QWZ4YUtuIiwic3ViIjoiYXV0aDB8NjM0NDg3ZWMyZDJjZTZlNjFhNTZmYWI5In0.KM4NhhDsPtXcK5wfoy87yPb0qUdDTFLS_DXizjBmczPZw5f6TJxWt8G_n_0T56w0CZc2oIGtABXhZ8Pz_UqZ6yynW35nLF3VnnmCmr7SfdQAs2NsJc83_nwkzTxH4YR8zkS1v0x8jJMrKYzq2wwrWrMS8-Zc3gDwe6eyqXWOGJqDOc0SaRDsR2eqWO9ip6DtZUXDPhldEyZz5DGoaSPn0RayHF5cpuw7aOZ2mRBLk7l3JBP-JLv7jakoc4Lfo-o1s_0PG9D4plSHwLBJtj3tQuQJvMHjPNfK6fwkIpz6jvkQZv5YHGzA9RNcEqmVisoNHRoo0-LamrovxzXGWJ21hYbGkJzCzLO0ljnV3fMe6X5xPZmuu6Y6RQRs56oNvJLuCO9pFbj3DigHEcYtcQdSj-B4VnQCwPubCAwMbWkM5KVopKP753skhQNKjmSLt1MDKg-M0jNFTXzAHmKoDXlTUSTC8Ek8ZlDbyYNnFFZMwgmQpEkAPwYxow1ymb-ZMqgKfiD_ia8fPqGm0LEN_VEA6UQ6Zq6KdeYDBM7XMw6_cmGtk69ZdYIgw0OqxwXPJFsUmzCSWkgU1wKZ8Lt2uYw8CbMJAVS6A3RW5MXruuNOYYRsid2aZuU9-XMhEW7kFILDwTPQEzTxLyd2JjNZN6cCXNhNfAjGNaDG8uEzJWfExlw",
+      "refresh": "rt_Lzb4kPrPiD4Qlqk3zqtV2qqtJsOtHKYYtyryxFzvZsI.7bUCiodpoqhX8SRrRcKDjFdcDOE8Uuky8UzOgSX9oOE",
+      "expires": 1769052821367.9792,
+      "accountId": "db79c304-7690-452e-a6fc-ad9419760939"
+    },
+    "anthropic:clawd": {
+      "type": "token",
+      "provider": "anthropic",
+      "token": "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"
+    },
+    "openrouter:default": {
+      "type": "api_key",
+      "provider": "openrouter",
+      "key": "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"
+    }
+  },
+  "lastGood": {
+    "anthropic": "anthropic:clawd"
+  },
+  "usageStats": {
+    "anthropic:claude-cli": {
+      "lastUsed": 1769549414329,
+      "errorCount": 0
+    },
+    "anthropic:clawd": {
+      "lastUsed": 1769630955549,
+      "errorCount": 0
+    }
+  }
+}
