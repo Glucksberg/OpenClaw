@@ -14,6 +14,7 @@ import {
   type SessionEntry,
   updateSessionStore,
 } from "../../config/sessions.js";
+import type { RecentCommandEntry } from "../../config/sessions/types.js";
 import { logVerbose } from "../../globals.js";
 import { clearCommandLane, getQueueSize } from "../../process/command-queue.js";
 import { normalizeMainKey } from "../../routing/session-key.js";
@@ -49,6 +50,23 @@ type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node"
 
 const BARE_SESSION_RESET_PROMPT =
   "A new session was started via /new or /reset. Say hi briefly (1-2 sentences) and ask what the user wants to do next. If the runtime model differs from default_model in the system prompt, mention the default model in the greeting. Do not mention internal steps, files, tools, or reasoning.";
+
+/**
+ * Format recent commands for agent context injection.
+ * Returns undefined if no recent commands exist.
+ */
+function formatRecentCommands(commands?: RecentCommandEntry[]): string | undefined {
+  if (!commands || commands.length === 0) return undefined;
+
+  const lines = ["## Recent Commands (user ran these before this message)"];
+  for (const entry of commands) {
+    const agoMs = Date.now() - entry.ts;
+    const agoStr =
+      agoMs < 60_000 ? `${Math.round(agoMs / 1000)}s ago` : `${Math.round(agoMs / 60_000)}m ago`;
+    lines.push(`- \`${entry.cmd}\` (${agoStr}): ${entry.summary}`);
+  }
+  return lines.join("\n");
+}
 
 type RunPreparedReplyParams = {
   ctx: MsgContext;
@@ -179,7 +197,24 @@ export async function runPreparedReply(
       })
     : "";
   const groupSystemPrompt = sessionCtx.GroupSystemPrompt?.trim() ?? "";
-  const extraSystemPrompt = [groupIntro, groupSystemPrompt].filter(Boolean).join("\n\n");
+  // Inject recent native command outputs into agent context (if configured)
+  const recentCommandsContext =
+    cfg.commands?.injectToContext !== false
+      ? formatRecentCommands(sessionEntry?.recentCommands)
+      : undefined;
+  // Clear recent commands after extracting them (so they're not repeated)
+  if (recentCommandsContext && sessionEntry && storePath && sessionKey) {
+    sessionEntry.recentCommands = [];
+    updateSessionStore(storePath, (store) => {
+      if (store[sessionKey]) {
+        store[sessionKey] = { ...store[sessionKey], recentCommands: [] };
+      }
+      return store;
+    }).catch(() => {});
+  }
+  const extraSystemPrompt = [groupIntro, groupSystemPrompt, recentCommandsContext]
+    .filter(Boolean)
+    .join("\n\n");
   const baseBody = sessionCtx.BodyStripped ?? sessionCtx.Body ?? "";
   // Use CommandBody/RawBody for bare reset detection (clean message without structural context).
   const rawBodyTrimmed = (ctx.CommandBody ?? ctx.RawBody ?? ctx.Body ?? "").trim();

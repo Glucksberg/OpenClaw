@@ -23,6 +23,18 @@ export type SessionOrigin = {
   threadId?: string | number;
 };
 
+/**
+ * Entry for recent native command outputs (for agent context injection).
+ */
+export type RecentCommandEntry = {
+  /** The command that was executed (e.g., "/models") */
+  cmd: string;
+  /** Summarized output of the command */
+  summary: string;
+  /** Timestamp (ms) when the command was executed */
+  ts: number;
+};
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -94,6 +106,11 @@ export type SessionEntry = {
   lastThreadId?: string | number;
   skillsSnapshot?: SessionSkillSnapshot;
   systemPromptReport?: SessionSystemPromptReport;
+  /**
+   * Recent native command outputs for agent context injection.
+   * Cleared after being injected into the agent's context.
+   */
+  recentCommands?: RecentCommandEntry[];
 };
 
 export function mergeSessionEntry(

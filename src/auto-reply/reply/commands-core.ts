@@ -27,11 +27,57 @@ import {
   handleUsageCommand,
 } from "./commands-session.js";
 import { handlePluginCommand } from "./commands-plugin.js";
+import { updateSessionStoreEntry } from "../../config/sessions/store.js";
+import type { RecentCommandEntry } from "../../config/sessions/types.js";
+import type { ReplyPayload } from "../types.js";
 import type {
   CommandHandler,
   CommandHandlerResult,
   HandleCommandsParams,
 } from "./commands-types.js";
+
+const MAX_RECENT_COMMANDS = 5;
+
+/**
+ * Summarize a command reply for agent context injection.
+ * Truncates to first 200 chars or first 3 lines.
+ */
+function summarizeCommandReply(reply: ReplyPayload): string {
+  const text = reply.text || "";
+  const lines = text.split("\n").slice(0, 3);
+  const summary = lines.join(" | ").slice(0, 200);
+  return summary + (text.length > 200 ? "..." : "");
+}
+
+/**
+ * Store a recent command output in the session entry for agent visibility.
+ */
+async function storeRecentCommand(params: {
+  storePath?: string;
+  sessionKey: string;
+  cmd: string;
+  summary: string;
+}): Promise<void> {
+  if (!params.storePath) return;
+
+  const entry: RecentCommandEntry = {
+    cmd: params.cmd,
+    summary: params.summary,
+    ts: Date.now(),
+  };
+
+  await updateSessionStoreEntry({
+    storePath: params.storePath,
+    sessionKey: params.sessionKey,
+    update: async (existing) => {
+      const current = existing.recentCommands ?? [];
+      const updated = [...current, entry].slice(-MAX_RECENT_COMMANDS);
+      return { recentCommands: updated };
+    },
+  }).catch((err) => {
+    logVerbose(`Failed to store recent command: ${err}`);
+  });
+}
 
 const HANDLERS: CommandHandler[] = [
   // Plugin commands are processed first, before built-in commands
@@ -110,7 +156,22 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
 
   for (const handler of HANDLERS) {
     const result = await handler(params, allowTextCommands);
-    if (result) return result;
+    if (result) {
+      // Store command context for agent visibility (if configured)
+      const injectToContext = params.cfg.commands?.injectToContext !== false;
+      if (result.reply && injectToContext && params.storePath) {
+        const cmdMatch = params.command.commandBodyNormalized.match(/^\/(\w+)/);
+        if (cmdMatch) {
+          await storeRecentCommand({
+            storePath: params.storePath,
+            sessionKey: params.sessionKey,
+            cmd: cmdMatch[0],
+            summary: summarizeCommandReply(result.reply),
+          });
+        }
+      }
+      return result;
+    }
   }
 
   const sendPolicy = resolveSendPolicy({
