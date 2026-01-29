@@ -107,6 +107,8 @@ export type CommandsConfig = {
   restart?: boolean;
   /** Enforce access-group allowlists/policies for commands (default: true). */
   useAccessGroups?: boolean;
+  /** Inject native command outputs into agent context (default: true). */
+  injectToContext?: boolean;
 };
 
 export type ProviderCommandsConfig = {

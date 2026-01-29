@@ -112,7 +112,9 @@ export const CommandsSchema = z
     debug: z.boolean().optional(),
     restart: z.boolean().optional(),
     useAccessGroups: z.boolean().optional(),
+    /** Inject native command outputs into agent context. Default: true */
+    injectToContext: z.boolean().optional().default(true),
   })
   .strict()
   .optional()
-  .default({ native: "auto", nativeSkills: "auto" });
+  .default({ native: "auto", nativeSkills: "auto", injectToContext: true });

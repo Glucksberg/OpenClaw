@@ -4,7 +4,10 @@ import type { SkillCommandSpec } from "../../agents/skills.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
+import { updateSessionStoreEntry } from "../../config/sessions/store.js";
+import type { RecentCommandEntry } from "../../config/sessions/types.js";
 import { listChatCommands, shouldHandleTextCommands } from "../commands-registry.js";
+import { logVerbose } from "../../globals.js";
 import { listSkillCommandsForWorkspace } from "../skill-commands.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "../thinking.js";
@@ -82,6 +85,51 @@ function resolveExecOverrides(params: {
 export type ReplyDirectiveResult =
   | { kind: "reply"; reply: ReplyPayload | ReplyPayload[] | undefined }
   | { kind: "continue"; result: ReplyDirectiveContinuation };
+
+const MAX_RECENT_COMMANDS = 5;
+
+/**
+ * Summarize a command reply for agent context injection.
+ */
+function summarizeReplyForContext(reply: ReplyPayload | ReplyPayload[] | undefined): string {
+  if (!reply) return "(no output)";
+  const text = Array.isArray(reply) ? reply.map((r) => r.text).join(" | ") : reply.text || "";
+  const lines = text.split("\n").slice(0, 3);
+  const summary = lines.join(" | ").slice(0, 200);
+  return summary + (text.length > 200 ? "..." : "");
+}
+
+/**
+ * Store a recent command output in the session entry for agent visibility.
+ */
+async function captureCommandForContext(params: {
+  cfg: MoltbotConfig;
+  storePath?: string;
+  sessionKey: string;
+  cmd: string;
+  reply: ReplyPayload | ReplyPayload[] | undefined;
+}): Promise<void> {
+  if (!params.storePath) return;
+  if (params.cfg.commands?.injectToContext === false) return;
+
+  const entry: RecentCommandEntry = {
+    cmd: params.cmd,
+    summary: summarizeReplyForContext(params.reply),
+    ts: Date.now(),
+  };
+
+  await updateSessionStoreEntry({
+    storePath: params.storePath,
+    sessionKey: params.sessionKey,
+    update: async (existing) => {
+      const current = existing.recentCommands ?? [];
+      const updated = [...current, entry].slice(-MAX_RECENT_COMMANDS);
+      return { recentCommands: updated };
+    },
+  }).catch((err) => {
+    logVerbose(`Failed to capture command for context: ${err}`);
+  });
+}
 
 export async function resolveReplyDirectives(params: {
   ctx: MsgContext;
@@ -443,6 +491,18 @@ export async function resolveReplyDirectives(params: {
     typing,
   });
   if (applyResult.kind === "reply") {
+    // Capture the command output for agent context (e.g., /model, /models responses)
+    // Must await to ensure capture completes before the reply is sent
+    const cmdMatch = command.commandBodyNormalized.match(/^\/(\w+)/);
+    if (cmdMatch && applyResult.reply) {
+      await captureCommandForContext({
+        cfg,
+        storePath,
+        sessionKey,
+        cmd: cmdMatch[0],
+        reply: applyResult.reply,
+      });
+    }
     return { kind: "reply", reply: applyResult.reply };
   }
   directives = applyResult.directives;
