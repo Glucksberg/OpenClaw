@@ -1,0 +1,26 @@
+{
+  "lastRun": "2026-01-29T07:02:00Z",
+  "commentsPosted": [
+    {"issue": 3462, "linkedTo": [3528, 3455, 3479, 3436, 2955], "date": "2026-01-28T20:54:00Z", "url": "https://github.com/moltbot/moltbot/issues/3462#issuecomment-3813883793"},
+    {"issue": 3528, "linkedTo": [3462, 3455, 2955], "date": "2026-01-28T20:54:00Z", "url": "https://github.com/moltbot/moltbot/issues/3528#issuecomment-3813884422"},
+    {"pr": 3362, "linkedTo": [3462, 3528, 2955], "date": "2026-01-28T20:54:00Z", "url": "https://github.com/moltbot/moltbot/pull/3362#issuecomment-3813884480"},
+    {"issue": 3479, "linkedTo": [3436, 3425, 3298, 3225, 3208], "date": "2026-01-28T20:54:00Z", "url": "https://github.com/moltbot/moltbot/issues/3479#issuecomment-3813885256"},
+    {"issue": 3486, "linkedTo": [3220, 2813, 3520, 3535], "date": "2026-01-28T20:54:00Z", "url": "https://github.com/moltbot/moltbot/issues/3486#issuecomment-3813885303"},
+    {"issue": 3621, "linkedTo": [3622], "date": "2026-01-29T01:20:00Z", "url": "https://github.com/moltbot/moltbot/issues/3621#issuecomment-3814809793"},
+    {"issue": 3615, "linkedTo": [3620], "date": "2026-01-29T01:20:00Z", "url": "https://github.com/moltbot/moltbot/issues/3615#issuecomment-3814809855"},
+    {"issue": 3604, "linkedTo": [3607], "date": "2026-01-29T01:20:00Z", "url": "https://github.com/moltbot/moltbot/issues/3604#issuecomment-3814809909"},
+    {"issue": 3582, "linkedTo": [3590], "date": "2026-01-29T01:20:00Z", "url": "https://github.com/moltbot/moltbot/issues/3582#issuecomment-3814809974"},
+    {"issue": 3589, "linkedTo": [3580, 3625], "date": "2026-01-29T01:20:00Z", "url": "https://github.com/moltbot/moltbot/issues/3589#issuecomment-3814810030"},
+    {"issue": 3809, "linkedTo": [3707], "date": "2026-01-29T07:02:00Z", "url": "https://github.com/moltbot/moltbot/issues/3809#issuecomment-3815862298"},
+    {"issue": 3778, "linkedTo": [3715, 3816, 3821, 3716], "date": "2026-01-29T07:02:00Z", "url": "https://github.com/moltbot/moltbot/issues/3778#issuecomment-3815862402"},
+    {"issue": 3725, "linkedTo": [3726, 3723, 3721], "date": "2026-01-29T07:02:00Z", "url": "https://github.com/moltbot/moltbot/issues/3725#issuecomment-3815862496"},
+    {"issue": 3741, "linkedTo": [3764], "date": "2026-01-29T07:02:00Z", "url": "https://github.com/moltbot/moltbot/issues/3741#issuecomment-3815862578"},
+    {"issue": 3795, "linkedTo": [3814], "date": "2026-01-29T07:02:00Z", "url": "https://github.com/moltbot/moltbot/issues/3795#issuecomment-3815862637"}
+  ],
+  "issuesAnalyzed": [3462, 3528, 3479, 3486, 3452, 3333, 3181, 3318, 3621, 3615, 3604, 3582, 3589, 3625, 3593, 3645, 3643, 3809, 3778, 3725, 3741, 3795, 3715, 3816, 3821, 3716, 3726, 3723],
+  "prsAnalyzed": [3362, 3335, 3622, 3620, 3607, 3590, 3580, 3599, 3650, 3707, 3764, 3814, 3721],
+  "stats": {
+    "totalCommentsPosted": 15,
+    "totalSkipped": 5
+  }
+}

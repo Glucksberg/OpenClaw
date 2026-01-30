@@ -6,12 +6,119 @@ const crypto = require('crypto');
 
 const FP_FILE = path.join(__dirname, '../false-positives.json');
 
+// Simple LRU Cache implementation (no external dependencies)
+class LRUCache {
+  constructor(maxSize = 500) {
+    this.maxSize = maxSize;
+    this.cache = new Map();
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return undefined;
+    // Move to end (most recently used)
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Delete oldest (first) entry
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
+
+  has(key) {
+    return this.cache.has(key);
+  }
+
+  delete(key) {
+    return this.cache.delete(key);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  get size() {
+    return this.cache.size;
+  }
+}
+
+// Simple Metrics collector
+class MetricsCollector {
+  constructor() {
+    this.latencies = new Map(); // method -> [latencies]
+    this.counters = new Map();  // name -> count
+    this.maxSamples = 1000;     // Keep last N samples per method
+  }
+
+  recordLatency(method, durationMs) {
+    if (!this.latencies.has(method)) {
+      this.latencies.set(method, []);
+    }
+    const samples = this.latencies.get(method);
+    samples.push({ ts: Date.now(), ms: durationMs });
+    
+    // Trim to maxSamples
+    if (samples.length > this.maxSamples) {
+      this.latencies.set(method, samples.slice(-this.maxSamples));
+    }
+  }
+
+  increment(name, value = 1) {
+    this.counters.set(name, (this.counters.get(name) || 0) + value);
+  }
+
+  getStats(method) {
+    const samples = this.latencies.get(method) || [];
+    if (samples.length === 0) return null;
+    
+    const values = samples.map(s => s.ms).sort((a, b) => a - b);
+    return {
+      count: values.length,
+      min: values[0],
+      max: values[values.length - 1],
+      avg: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2),
+      p50: values[Math.floor(values.length * 0.5)],
+      p95: values[Math.floor(values.length * 0.95)],
+      p99: values[Math.floor(values.length * 0.99)]
+    };
+  }
+
+  getAllStats() {
+    const stats = {};
+    for (const method of this.latencies.keys()) {
+      stats[method] = this.getStats(method);
+    }
+    stats.counters = Object.fromEntries(this.counters);
+    return stats;
+  }
+
+  reset() {
+    this.latencies.clear();
+    this.counters.clear();
+  }
+}
+
 class FalsePositiveManager {
-  constructor(customPath = null) {
+  constructor(customPath = null, options = {}) {
     this.fpFile = customPath || FP_FILE;
     this.data = this.loadData();
-    this.regexCache = new Map(); // Performance: Cache compiled regexes
-    this.recentErrors = new Map(); // Rate limiting tracking
+    
+    // LRU cache with configurable size (default 500)
+    this.regexCache = new LRUCache(options.regexCacheSize || 500);
+    
+    // LRU cache for recent errors (default 1000)
+    this.recentErrors = new LRUCache(options.recentErrorsCacheSize || 1000);
+    
+    // Metrics collector
+    this.metrics = new MetricsCollector();
   }
 
   loadData() {
@@ -22,7 +129,7 @@ class FalsePositiveManager {
           created: new Date().toISOString(),
           last_updated: new Date().toISOString(),
           total_entries: 0,
-          version: "1.1"
+          version: "1.2"
         },
         config: {
           auto_classify_threshold: 3,
@@ -38,6 +145,9 @@ class FalsePositiveManager {
       // Migrate older versions if needed
       if (!data.config.recent_errors_window_minutes) {
         data.config.recent_errors_window_minutes = 15;
+      }
+      if (data.metadata.version !== "1.2") {
+        data.metadata.version = "1.2";
       }
       return data;
     } catch (error) {
@@ -79,36 +189,40 @@ class FalsePositiveManager {
     }
   }
 
-  // Performance: Get compiled regex from cache
+  // Performance: Get compiled regex from LRU cache
   _getCompiledRegex(id, pattern) {
-    if (!this.regexCache.has(id)) {
-      try {
-        this.regexCache.set(id, new RegExp(pattern, 'i'));
-      } catch (error) {
-        console.warn(`Invalid regex pattern for ${id}: ${pattern}`);
-        return null;
-      }
+    const cached = this.regexCache.get(id);
+    if (cached) return cached;
+    
+    try {
+      const regex = new RegExp(pattern, 'i');
+      this.regexCache.set(id, regex);
+      return regex;
+    } catch (error) {
+      console.warn(`Invalid regex pattern for ${id}: ${pattern}`);
+      return null;
     }
-    return this.regexCache.get(id);
   }
 
-  // ML-Ready: Track recent errors for auto-classification
+  // ML-Ready: Track recent errors for auto-classification (with LRU bounds)
   _trackRecentError(errorMessage) {
     const hash = crypto.createHash('md5').update(errorMessage).digest('hex');
     const now = Date.now();
     const windowMs = this.data.config.recent_errors_window_minutes * 60 * 1000;
     
-    if (!this.recentErrors.has(hash)) {
-      this.recentErrors.set(hash, []);
+    let record = this.recentErrors.get(hash);
+    if (!record) {
+      record = { timestamps: [], hash };
     }
     
-    const recent = this.recentErrors.get(hash);
-    recent.push(now);
+    record.timestamps.push(now);
     
-    // Clean old entries
-    this.recentErrors.set(hash, recent.filter(timestamp => now - timestamp < windowMs));
+    // Clean old entries within this record
+    record.timestamps = record.timestamps.filter(ts => now - ts < windowMs);
     
-    return this.recentErrors.get(hash).length;
+    this.recentErrors.set(hash, record);
+    
+    return record.timestamps.length;
   }
 
   // Auto-classification: Detect if error should become FP
@@ -156,6 +270,7 @@ class FalsePositiveManager {
     this._getCompiledRegex(id, pattern);
     
     this.saveData();
+    this.metrics.increment('fp_added');
     return fp;
   }
 
@@ -185,34 +300,49 @@ class FalsePositiveManager {
     }
 
     this.saveData();
+    this.metrics.increment('fp_incremented');
     return fp;
   }
 
-  // Security & Performance: Enhanced pattern matching
+  // Security & Performance: Enhanced pattern matching with metrics
   checkMatch(errorMessage, processName = '') {
-    if (!errorMessage || typeof errorMessage !== 'string') {
-      return null;
-    }
-
-    for (const [id, fp] of Object.entries(this.data.false_positives)) {
-      const regex = this._getCompiledRegex(id, fp.pattern);
-      if (!regex) continue; // Skip invalid patterns
-      
-      try {
-        if (regex.test(errorMessage)) {
-          // Verify process match if specified
-          if (fp.affected_processes.length > 0 && processName && 
-              !fp.affected_processes.includes(processName)) {
-            continue;
-          }
-          return { id, fp };
-        }
-      } catch (error) {
-        console.warn(`Error testing pattern for ${id}:`, error);
-        continue;
+    const startTime = process.hrtime.bigint();
+    
+    try {
+      if (!errorMessage || typeof errorMessage !== 'string') {
+        return null;
       }
+
+      this.metrics.increment('checkMatch_calls');
+
+      for (const [id, fp] of Object.entries(this.data.false_positives)) {
+        const regex = this._getCompiledRegex(id, fp.pattern);
+        if (!regex) continue; // Skip invalid patterns
+        
+        try {
+          if (regex.test(errorMessage)) {
+            // Verify process match if specified
+            if (fp.affected_processes.length > 0 && processName && 
+                !fp.affected_processes.includes(processName)) {
+              continue;
+            }
+            this.metrics.increment('checkMatch_hits');
+            return { id, fp };
+          }
+        } catch (error) {
+          console.warn(`Error testing pattern for ${id}:`, error);
+          this.metrics.increment('checkMatch_errors');
+          continue;
+        }
+      }
+      
+      this.metrics.increment('checkMatch_misses');
+      return null;
+    } finally {
+      const endTime = process.hrtime.bigint();
+      const durationMs = Number(endTime - startTime) / 1000000;
+      this.metrics.recordLatency('checkMatch', durationMs);
     }
-    return null;
   }
 
   // Enhanced: List with sorting options
@@ -236,7 +366,7 @@ class FalsePositiveManager {
     });
   }
 
-  // Enhanced: Detailed statistics
+  // Enhanced: Detailed statistics including metrics
   getStats() {
     const fps = Object.values(this.data.false_positives);
     const now = Date.now();
@@ -253,8 +383,22 @@ class FalsePositiveManager {
         high: fps.filter(fp => fp.severity === 'high').length,
         medium: fps.filter(fp => fp.severity === 'medium').length,
         low: fps.filter(fp => fp.severity === 'low').length
+      },
+      cache: {
+        regex_cache_size: this.regexCache.size,
+        recent_errors_cache_size: this.recentErrors.size
       }
     };
+  }
+
+  // Get performance metrics
+  getMetrics() {
+    return this.metrics.getAllStats();
+  }
+
+  // Reset metrics (useful after exporting)
+  resetMetrics() {
+    this.metrics.reset();
   }
 
   // ML-Ready: Export training data
@@ -304,7 +448,9 @@ class FalsePositiveManager {
     report += `• Total de tipos: ${stats.total}\n`;
     report += `• Total de ocorrências: ${stats.total_occurrences}\n`;
     report += `• Auto-resolvíveis: ${stats.auto_resolvable}\n`;
-    report += `• Ativos nas últimas 24h: ${stats.recent_24h}\n\n`;
+    report += `• Ativos nas últimas 24h: ${stats.recent_24h}\n`;
+    report += `• Regex cache: ${stats.cache.regex_cache_size} entries\n`;
+    report += `• Recent errors cache: ${stats.cache.recent_errors_cache_size} entries\n\n`;
 
     report += `⚠️ *Por Severidade*:\n`;
     report += `• Critical: ${stats.by_severity.critical}\n`;
@@ -370,6 +516,10 @@ if (require.main === module) {
         console.log(JSON.stringify(manager.getStats(), null, 2));
         break;
         
+      case 'metrics':
+        console.log(JSON.stringify(manager.getMetrics(), null, 2));
+        break;
+        
       case 'report':
         const includeHistory = process.argv[3] === '--history';
         console.log(manager.generateReport(includeHistory));
@@ -430,7 +580,8 @@ if (require.main === module) {
 
 Commands:
   list [sortBy] [order]     - List false positives (sortBy: count|last_seen|severity)
-  stats                     - Show statistics
+  stats                     - Show statistics (includes cache sizes)
+  metrics                   - Show performance metrics (latency, hit rates)
   report [--history]        - Generate formatted report
   check <message> [process] - Check if message matches known false positive
   add <id> <name> <desc> <pattern> [--auto-resolve] [--severity=level]

@@ -154,6 +154,20 @@
 - For manual `moltbot message send` messages that include `!`, use the heredoc pattern noted below to avoid the Bash tool’s escaping.
 - Release guardrails: do not change version numbers without operator’s explicit consent; always ask permission before running any npm publish/release step.
 
+## Fork-Only Branch: `fork/local-agents`
+- **Purpose:** Store local agent workspaces (configs, memory, monitor state) that should NOT go to upstream.
+- **Branch:** `fork/local-agents` — never merge to `main`, never include in PRs to upstream.
+- **Contents:** `agents/` directory (except `agents/opsec/` which is upstream).
+- **Workflow:**
+  - Work normally on `main` for code changes.
+  - Switch to `fork/local-agents` only to update agent configs/state.
+  - Keep this branch rebased on `main` periodically: `git rebase main`.
+- **⚠️ NEVER:**
+  - Cherry-pick commits from `fork/local-agents` into PRs.
+  - Push `fork/local-agents` to upstream (only to your fork's origin).
+  - Include `auth-profiles.json` in any public/upstream commits.
+- **Sensitive files:** `auth-profiles.json` contains credentials — exists only in this branch.
+
 ## NPM + 1Password (publish/verify)
 - Use the 1password skill; all `op` commands must run inside a fresh tmux session.
 - Sign in: `eval "$(op signin --account my.1password.com)"` (app unlocked + integration on).

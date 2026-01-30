@@ -71,3 +71,12 @@ USER.md
 
 # local tooling
 .serena/
+
+# Agent credentials (fork-only, never commit)
+agents/*/auth-profiles.json
+
+# CLAUDE.md context files
+**/CLAUDE.md
+
+# Python cache
+**/__pycache__/

@@ -1,0 +1,136 @@
+# Prenotami Monitor v2.1 - Multi-Client Docker Compose
+#
+# Usage:
+#   docker-compose up -d                    # Start all clients
+#   docker-compose up -d client1            # Start specific client
+#   docker-compose logs -f client1          # View logs
+#   docker-compose down                     # Stop all
+#
+# Add new clients by duplicating the client1 section
+
+version: "3.8"
+
+services:
+  # Example Client 1
+  client1:
+    build: .
+    container_name: prenotami-client1
+    restart: unless-stopped
+    environment:
+      - ACCOUNT_ID=client1
+      - PRENOTAMI_EMAIL=${CLIENT1_EMAIL}
+      - PRENOTAMI_PASSWORD=${CLIENT1_PASSWORD}
+      - PRENOTAMI_CONSULATE=${CLIENT1_CONSULATE:-saopaulo}
+      - PRENOTAMI_SERVICE=${CLIENT1_SERVICE:-passport_first}
+      - NOTIFY_CHANNEL=${NOTIFY_CHANNEL:-telegram}
+      - NOTIFY_TARGET=${CLIENT1_NOTIFY_TARGET}
+      - AUTO_BOOK=${CLIENT1_AUTO_BOOK:-false}
+      - CAPTCHA_API_KEY=${CAPTCHA_API_KEY:-}
+      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY:-}
+      - PROXY_SERVERS=${PROXY_SERVERS:-}
+      - PROXY_ROTATE=${PROXY_ROTATE:-false}
+      - MAX_CONSECUTIVE_ERRORS=${MAX_CONSECUTIVE_ERRORS:-20}
+      - BROWSER_RESTART_INTERVAL_MS=${BROWSER_RESTART_INTERVAL_MS:-21600000}
+      - HEADLESS=true
+      - HEALTH_PORT=8080
+    volumes:
+      - ./sessions:/app/sessions
+      - ./screenshots:/app/screenshots
+    ports:
+      - "8081:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Example Client 2 (uncomment to enable)
+  # client2:
+  #   build: .
+  #   container_name: prenotami-client2
+  #   restart: unless-stopped
+  #   environment:
+  #     - ACCOUNT_ID=client2
+  #     - PRENOTAMI_EMAIL=${CLIENT2_EMAIL}
+  #     - PRENOTAMI_PASSWORD=${CLIENT2_PASSWORD}
+  #     - PRENOTAMI_CONSULATE=${CLIENT2_CONSULATE:-saopaulo}
+  #     - PRENOTAMI_SERVICE=${CLIENT2_SERVICE:-passport_first}
+  #     - NOTIFY_CHANNEL=${NOTIFY_CHANNEL:-telegram}
+  #     - NOTIFY_TARGET=${CLIENT2_NOTIFY_TARGET}
+  #     - AUTO_BOOK=${CLIENT2_AUTO_BOOK:-false}
+  #     - CAPTCHA_API_KEY=${CAPTCHA_API_KEY:-}
+  #     - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY:-}
+  #     - PROXY_SERVERS=${PROXY_SERVERS:-}
+  #     - PROXY_ROTATE=${PROXY_ROTATE:-false}
+  #     - MAX_CONSECUTIVE_ERRORS=${MAX_CONSECUTIVE_ERRORS:-20}
+  #     - BROWSER_RESTART_INTERVAL_MS=${BROWSER_RESTART_INTERVAL_MS:-21600000}
+  #     - HEADLESS=true
+  #     - HEALTH_PORT=8080
+  #   volumes:
+  #     - ./sessions:/app/sessions
+  #     - ./screenshots:/app/screenshots
+  #   ports:
+  #     - "8082:8080"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1G
+  #         cpus: '0.5'
+  #       reservations:
+  #         memory: 512M
+  #         cpus: '0.25'
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 60s
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+
+  # Prometheus metrics collector (optional)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prenotami-prometheus
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus-data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+
+  # Grafana dashboard (optional)
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: prenotami-grafana
+  #   restart: unless-stopped
+  #   volumes:
+  #     - grafana-data:/var/lib/grafana
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+
+volumes:
+  prometheus-data:
+  grafana-data:
