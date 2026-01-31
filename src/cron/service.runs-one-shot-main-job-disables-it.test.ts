@@ -426,7 +426,7 @@ describe("CronService", () => {
     await vi.runOnlyPendingTimersAsync();
     await waitForJobs(cron, (items) => items.some((item) => item.state.lastStatus === "error"));
 
-    expect(enqueueSystemEvent).toHaveBeenCalledWith("Cron (error): last output", {
+    expect(enqueueSystemEvent).toHaveBeenCalledWith("isolated error test (error): last output", {
       agentId: undefined,
     });
     expect(requestHeartbeatNow).toHaveBeenCalled();
