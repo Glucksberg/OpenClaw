@@ -162,7 +162,10 @@ async function resizeImageBase64IfNeeded(params: {
   const meta = await getImageMetadata(buf);
   const width = meta?.width;
   const height = meta?.height;
-  const overBytes = buf.byteLength > params.maxBytes;
+  // Compare base64 string length, not decoded buffer size.
+  // The Anthropic API enforces the 5MB limit on the base64 string, which is ~33% larger than the decoded bytes.
+  const base64Length = params.base64.length;
+  const overBytes = base64Length > params.maxBytes;
   const hasDimensions = typeof width === "number" && typeof height === "number";
   const overDimensions =
     hasDimensions && (width > params.maxDimensionPx || height > params.maxDimensionPx);
@@ -180,12 +183,34 @@ async function resizeImageBase64IfNeeded(params: {
       height,
     };
   }
+  if (
+    hasDimensions &&
+    (width > params.maxDimensionPx || height > params.maxDimensionPx || overBytes)
+  ) {
+    const sourcePixels =
+      typeof width === "number" && typeof height === "number"
+        ? `${width}x${height}px`
+        : "unknown";
+    log.warn(
+      `Image exceeds limits; resizing: ${sourcePixels} base64=${base64Length}`,
+      {
+        label: params.label,
+        width,
+        height,
+        maxDimensionPx: params.maxDimensionPx,
+        maxBytes: params.maxBytes,
+        base64Length,
+        triggerOverBytes: overBytes,
+        triggerOverDimensions: overDimensions,
+      },
+    );
+  }
 
   const maxDim = hasDimensions ? Math.max(width ?? 0, height ?? 0) : params.maxDimensionPx;
   const sideStart = maxDim > 0 ? Math.min(params.maxDimensionPx, maxDim) : params.maxDimensionPx;
   const sideGrid = buildImageResizeSideGrid(params.maxDimensionPx, sideStart);
 
-  let smallest: { buffer: Buffer; size: number } | null = null;
+  let smallest: { base64: string; size: number } | null = null;
   for (const side of sideGrid) {
     for (const quality of IMAGE_REDUCE_QUALITY_STEPS) {
       const out = await resizeToJpeg({
@@ -194,10 +219,12 @@ async function resizeImageBase64IfNeeded(params: {
         quality,
         withoutEnlargement: true,
       });
-      if (!smallest || out.byteLength < smallest.size) {
-        smallest = { buffer: out, size: out.byteLength };
+      const outBase64 = out.toString("base64");
+      const outBase64Length = outBase64.length;
+      if (!smallest || outBase64Length < smallest.size) {
+        smallest = { base64: outBase64, size: outBase64Length };
       }
-      if (out.byteLength <= params.maxBytes) {
+      if (outBase64Length <= params.maxBytes) {
         const sourcePixels =
           typeof width === "number" && typeof height === "number"
             ? `${width}x${height}px`
@@ -205,32 +232,32 @@ async function resizeImageBase64IfNeeded(params: {
         const sourceWithFile = params.fileName
           ? `${params.fileName} ${sourcePixels}`
           : sourcePixels;
-        const byteReductionPct =
-          buf.byteLength > 0
-            ? Number((((buf.byteLength - out.byteLength) / buf.byteLength) * 100).toFixed(1))
+        const reductionPct =
+          base64Length > 0
+            ? Number((((base64Length - outBase64Length) / base64Length) * 100).toFixed(1))
             : 0;
         log.info(
-          `Image resized to fit limits: ${sourceWithFile} ${formatBytesShort(buf.byteLength)} -> ${formatBytesShort(out.byteLength)} (-${byteReductionPct}%)`,
+          `Image resized to fit limits: ${sourceWithFile} base64 ${base64Length} -> ${outBase64Length} (-${reductionPct}%)`,
           {
             label: params.label,
             fileName: params.fileName,
             sourceMimeType: params.mimeType,
             sourceWidth: width,
             sourceHeight: height,
-            sourceBytes: buf.byteLength,
+            sourceBase64Length: base64Length,
             maxBytes: params.maxBytes,
             maxDimensionPx: params.maxDimensionPx,
             triggerOverBytes: overBytes,
             triggerOverDimensions: overDimensions,
             outputMimeType: "image/jpeg",
-            outputBytes: out.byteLength,
+            outputBase64Length: outBase64Length,
             outputQuality: quality,
             outputMaxSide: side,
-            byteReductionPct,
+            reductionPct,
           },
         );
         return {
-          base64: out.toString("base64"),
+          base64: outBase64,
           mimeType: "image/jpeg",
           resized: true,
           width,
@@ -240,24 +267,25 @@ async function resizeImageBase64IfNeeded(params: {
     }
   }
 
-  const best = smallest?.buffer ?? buf;
+  const bestBase64 = smallest?.base64 ?? params.base64;
+  const bestSize = smallest?.size ?? base64Length;
   const maxMb = (params.maxBytes / (1024 * 1024)).toFixed(0);
-  const gotMb = (best.byteLength / (1024 * 1024)).toFixed(2);
+  const gotMb = (bestSize / (1024 * 1024)).toFixed(2);
   const sourcePixels =
     typeof width === "number" && typeof height === "number" ? `${width}x${height}px` : "unknown";
   const sourceWithFile = params.fileName ? `${params.fileName} ${sourcePixels}` : sourcePixels;
   log.warn(
-    `Image resize failed to fit limits: ${sourceWithFile} best=${formatBytesShort(best.byteLength)} limit=${formatBytesShort(params.maxBytes)}`,
+    `Image resize failed to fit limits: ${sourceWithFile} bestBase64=${bestSize} limit=${params.maxBytes}`,
     {
       label: params.label,
       fileName: params.fileName,
       sourceMimeType: params.mimeType,
       sourceWidth: width,
       sourceHeight: height,
-      sourceBytes: buf.byteLength,
+      sourceBase64Length: base64Length,
       maxDimensionPx: params.maxDimensionPx,
       maxBytes: params.maxBytes,
-      smallestCandidateBytes: best.byteLength,
+      smallestCandidateBase64Length: bestSize,
       triggerOverBytes: overBytes,
       triggerOverDimensions: overDimensions,
     },
