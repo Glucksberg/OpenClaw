@@ -433,4 +433,52 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     expect(chatLog.dropAssistant).toHaveBeenCalledWith("run-silent");
     expect(chatLog.finalizeAssistant).not.toHaveBeenCalled();
   });
+
+  it("suppresses display when final message is NO_REPLY", () => {
+    const state = makeState({ activeChatRunId: null });
+    const { chatLog, tui, setActivityStatus } = makeContext(state);
+    const { handleChatEvent } = createEventHandlers({
+      // oxlint-disable-next-line typescript/no-explicit-any
+      chatLog: chatLog as any,
+      // oxlint-disable-next-line typescript/no-explicit-any
+      tui: tui as any,
+      state,
+      setActivityStatus,
+    });
+
+    handleChatEvent({
+      runId: "run-noreply",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      message: { content: "NO_REPLY" },
+    });
+
+    expect(chatLog.dropAssistant).toHaveBeenCalledWith("run-noreply");
+    expect(chatLog.finalizeAssistant).not.toHaveBeenCalled();
+    expect(setActivityStatus).toHaveBeenCalledWith("idle");
+    expect(state.activeChatRunId).toBeNull();
+  });
+
+  it("displays normal messages that are not NO_REPLY", () => {
+    const state = makeState({ activeChatRunId: null });
+    const { chatLog, tui, setActivityStatus } = makeContext(state);
+    const { handleChatEvent } = createEventHandlers({
+      // oxlint-disable-next-line typescript/no-explicit-any
+      chatLog: chatLog as any,
+      // oxlint-disable-next-line typescript/no-explicit-any
+      tui: tui as any,
+      state,
+      setActivityStatus,
+    });
+
+    handleChatEvent({
+      runId: "run-normal",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      message: { content: "Hello, how can I help?" },
+    });
+
+    expect(chatLog.dropAssistant).not.toHaveBeenCalled();
+    expect(chatLog.finalizeAssistant).toHaveBeenCalled();
+  });
 });
