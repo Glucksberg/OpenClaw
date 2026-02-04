@@ -1,5 +1,6 @@
 import type { Component } from "@mariozechner/pi-tui";
 import { Container, Spacer, Text } from "@mariozechner/pi-tui";
+import { isSilentReplyText } from "../../auto-reply/tokens.js";
 import { theme } from "../theme/theme.js";
 import { AssistantMessageComponent } from "./assistant-message.js";
 import { ToolExecutionComponent } from "./tool-execution.js";
@@ -91,6 +92,10 @@ export class ChatLog extends Container {
   }
 
   finalizeAssistant(text: string, runId?: string) {
+    if (isSilentReplyText(text)) {
+      this.dropAssistant(runId);
+      return;
+    }
     const effectiveRunId = this.resolveRunId(runId);
     const existing = this.streamingRuns.get(effectiveRunId);
     if (existing) {
