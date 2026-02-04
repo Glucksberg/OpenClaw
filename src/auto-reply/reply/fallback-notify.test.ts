@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkFallbackNotification } from "./fallback-notify.js";
 
 describe("checkFallbackNotification", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("returns undefined when no attempts (primary succeeded)", () => {
     const result = checkFallbackNotification({
       sessionKey: "test-session-1",
@@ -184,5 +188,84 @@ describe("checkFallbackNotification", () => {
     });
     expect(result).toBeDefined();
     expect(result).not.toContain("(undefined)");
+  });
+
+  it("evicts oldest entries when exceeding max tracked sessions", () => {
+    // Fill up the tracker beyond the 1000-entry cap.
+    // We add 1002 unique sessions, then verify the first two were evicted
+    // by checking that a new call with those keys produces a notification
+    // (meaning they were forgotten).
+    for (let i = 0; i < 1002; i++) {
+      checkFallbackNotification({
+        sessionKey: `evict-cap-${i}`,
+        originalProvider: "openai",
+        originalModel: "gpt-4.1-mini",
+        usedProvider: "anthropic",
+        usedModel: "claude-haiku-3-5",
+        attempts: [{ provider: "openai", model: "gpt-4.1-mini", error: "rate limited" }],
+      });
+    }
+
+    // Session 0 and 1 should have been evicted — calling again should notify
+    const evicted = checkFallbackNotification({
+      sessionKey: "evict-cap-0",
+      originalProvider: "openai",
+      originalModel: "gpt-4.1-mini",
+      usedProvider: "anthropic",
+      usedModel: "claude-haiku-3-5",
+      attempts: [{ provider: "openai", model: "gpt-4.1-mini", error: "rate limited" }],
+    });
+    expect(evicted).toBeDefined();
+
+    // Session 1001 should still be tracked — calling again should suppress
+    const retained = checkFallbackNotification({
+      sessionKey: "evict-cap-1001",
+      originalProvider: "openai",
+      originalModel: "gpt-4.1-mini",
+      usedProvider: "anthropic",
+      usedModel: "claude-haiku-3-5",
+      attempts: [{ provider: "openai", model: "gpt-4.1-mini", error: "rate limited" }],
+    });
+    expect(retained).toBeUndefined();
+  });
+
+  it("evicts stale entries based on TTL", () => {
+    const sessionKey = "test-ttl-session";
+
+    // Record a fallback notification
+    const first = checkFallbackNotification({
+      sessionKey,
+      originalProvider: "openai",
+      originalModel: "gpt-4.1-mini",
+      usedProvider: "anthropic",
+      usedModel: "claude-haiku-3-5",
+      attempts: [{ provider: "openai", model: "gpt-4.1-mini", error: "rate limited" }],
+    });
+    expect(first).toBeDefined();
+
+    // Same call is suppressed (entry exists)
+    const suppressed = checkFallbackNotification({
+      sessionKey,
+      originalProvider: "openai",
+      originalModel: "gpt-4.1-mini",
+      usedProvider: "anthropic",
+      usedModel: "claude-haiku-3-5",
+      attempts: [{ provider: "openai", model: "gpt-4.1-mini", error: "rate limited" }],
+    });
+    expect(suppressed).toBeUndefined();
+
+    // Advance time by > 1 hour so the entry expires
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61 * 60 * 1000);
+
+    // Entry should have been evicted — notification fires again
+    const afterTtl = checkFallbackNotification({
+      sessionKey,
+      originalProvider: "openai",
+      originalModel: "gpt-4.1-mini",
+      usedProvider: "anthropic",
+      usedModel: "claude-haiku-3-5",
+      attempts: [{ provider: "openai", model: "gpt-4.1-mini", error: "rate limited" }],
+    });
+    expect(afterTtl).toBeDefined();
   });
 });
