@@ -434,7 +434,28 @@ export async function compactEmbeddedPiSessionDirect(
         if (limited.length > 0) {
           session.agent.replaceMessages(limited);
         }
-        const result = await session.compact(params.customInstructions);
+        let result: Awaited<ReturnType<typeof session.compact>>;
+        try {
+          result = await session.compact(params.customInstructions);
+        } catch (compactErr) {
+          const errMsg = describeUnknownError(compactErr);
+          // If blocked by "Already compacted", inject a marker entry and retry once.
+          // This happens when the last entry is a compaction summary and no new messages
+          // have been added since (e.g., agent failed on context overflow before responding).
+          if (errMsg.toLowerCase().includes("already compacted")) {
+            log.warn(
+              "Compaction blocked by 'Already compacted'; injecting marker entry and retrying",
+            );
+            sessionManager.appendCustomEntry("compaction_unlock", {
+              reason: "Injected to allow re-compaction after context overflow",
+              ts: Date.now(),
+            });
+            // Retry compaction after injecting the marker
+            result = await session.compact(params.customInstructions);
+          } else {
+            throw compactErr;
+          }
+        }
         // Estimate tokens after compaction by summing token estimates for remaining messages
         let tokensAfter: number | undefined;
         try {
@@ -469,10 +490,20 @@ export async function compactEmbeddedPiSessionDirect(
       await sessionLock.release();
     }
   } catch (err) {
+    const errText = describeUnknownError(err);
+    // Provide actionable message when blocked by "Already compacted" restriction.
+    // This happens when the last session entry is a compaction summary and no new
+    // messages have been added since (e.g., agent failed on context overflow before responding).
+    const isAlreadyCompacted =
+      errText.toLowerCase().includes("already compacted") ||
+      errText.toLowerCase().includes("nothing to compact");
+    const reason = isAlreadyCompacted
+      ? "Already compacted (send any message first to unlock, then /compact again)"
+      : errText;
     return {
       ok: false,
       compacted: false,
-      reason: describeUnknownError(err),
+      reason,
     };
   } finally {
     restoreSkillEnv?.();

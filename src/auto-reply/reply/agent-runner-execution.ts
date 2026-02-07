@@ -12,7 +12,6 @@ import { runWithModelFallback } from "../../agents/model-fallback.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import {
   isCompactionFailureError,
-  isContextOverflowError,
   isLikelyContextOverflowError,
   sanitizeUserFacingText,
 } from "../../agents/pi-embedded-helpers.js";
@@ -473,7 +472,7 @@ export async function runAgentTurnWithFallback(params: {
       const embeddedError = runResult.meta?.error;
       if (
         embeddedError &&
-        isContextOverflowError(embeddedError.message) &&
+        isLikelyContextOverflowError(embeddedError.message) &&
         !didResetAfterCompactionFailure &&
         (await params.resetSessionAfterCompactionFailure(embeddedError.message))
       ) {
