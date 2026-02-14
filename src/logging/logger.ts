@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Logger as TsLogger } from "tslog";
-import { getCommandPathWithRootOptions } from "../cli/argv.js";
 import type { OpenClawConfig } from "../config/types.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { readLoggingConfig } from "./config.js";
@@ -21,6 +20,7 @@ const MAX_LOG_AGE_MS = 24 * 60 * 60 * 1000; // 24h
 const DEFAULT_MAX_LOG_FILE_BYTES = 500 * 1024 * 1024; // 500 MB
 
 const requireConfig = resolveNodeRequireFromMeta(import.meta.url);
+let resolvingSettings = false;
 
 export type LoggerSettings = {
   level?: LogLevel;
@@ -43,9 +43,11 @@ export type LogTransport = (logObj: LogTransportRecord) => void;
 
 const externalTransports = new Set<LogTransport>();
 
-function shouldSkipLoadConfigFallback(argv: string[] = process.argv): boolean {
-  const [primary, secondary] = getCommandPathWithRootOptions(argv, 2);
-  return primary === "config" && secondary === "validate";
+function resolveFallbackSettings(): ResolvedSettings {
+  const override = loggingState.overrideSettings as LoggerSettings | null;
+  const level = normalizeLogLevel(override?.level, "info");
+  const file = override?.file ?? defaultRollingPathForToday();
+  return { level, file };
 }
 
 function attachExternalTransport(logger: TsLogger<LogObj>, transport: LogTransport): void {
@@ -71,38 +73,41 @@ function canUseSilentVitestFileLogFastPath(envLevel: LogLevel | undefined): bool
 }
 
 function resolveSettings(): ResolvedSettings {
-  const envLevel = resolveEnvLogLevelOverride();
-  // Test runs default file logs to silent. Skip config reads and fallback load in the
-  // common case to avoid pulling heavy config/schema stacks on startup.
-  if (canUseSilentVitestFileLogFastPath(envLevel)) {
-    return {
-      level: "silent",
-      file: defaultRollingPathForToday(),
-      maxFileBytes: DEFAULT_MAX_LOG_FILE_BYTES,
-    };
+  // Reentrancy guard: config loading can log errors, and console capture routes
+  // those logs back through getLogger(). In that case, avoid recursive loadConfig().
+  if (resolvingSettings) {
+    return resolveFallbackSettings();
   }
+  resolvingSettings = true;
 
-  let cfg: OpenClawConfig["logging"] | undefined =
-    (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
-  if (!cfg && !shouldSkipLoadConfigFallback()) {
-    try {
-      const loaded = requireConfig?.("../config/config.js") as
-        | {
-            loadConfig?: () => OpenClawConfig;
-          }
-        | undefined;
-      cfg = loaded?.loadConfig?.().logging;
-    } catch {
-      cfg = undefined;
+  try {
+    let cfg: OpenClawConfig["logging"] | undefined =
+      (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
+    if (!cfg) {
+      try {
+        const loaded = requireConfig?.("../config/config.js") as
+          | {
+              loadConfig?: () => OpenClawConfig;
+            }
+          | undefined;
+        cfg = loaded?.loadConfig?.().logging;
+      } catch {
+        cfg = undefined;
+      }
     }
+    const defaultLevel =
+      process.env.VITEST === "true" && process.env.OPENCLAW_TEST_FILE_LOG !== "1"
+        ? "silent"
+        : "info";
+    const fromConfig = normalizeLogLevel(cfg?.level, defaultLevel);
+    const envLevel = resolveEnvLogLevelOverride();
+    const level = envLevel ?? fromConfig;
+    const file = cfg?.file ?? defaultRollingPathForToday();
+    const maxFileBytes = resolveMaxLogFileBytes(cfg?.maxFileBytes);
+    return { level, file, maxFileBytes };
+  } finally {
+    resolvingSettings = false;
   }
-  const defaultLevel =
-    process.env.VITEST === "true" && process.env.OPENCLAW_TEST_FILE_LOG !== "1" ? "silent" : "info";
-  const fromConfig = normalizeLogLevel(cfg?.level, defaultLevel);
-  const level = envLevel ?? fromConfig;
-  const file = cfg?.file ?? defaultRollingPathForToday();
-  const maxFileBytes = resolveMaxLogFileBytes(cfg?.maxFileBytes);
-  return { level, file, maxFileBytes };
 }
 
 function settingsChanged(a: ResolvedSettings | null, b: ResolvedSettings) {
@@ -294,10 +299,6 @@ export function registerLogTransport(transport: LogTransport): () => void {
     externalTransports.delete(transport);
   };
 }
-
-export const __test__ = {
-  shouldSkipLoadConfigFallback,
-};
 
 function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
