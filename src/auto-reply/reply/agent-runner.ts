@@ -374,8 +374,13 @@ export async function runReplyAgent(params: {
       return finalizeWithFollowup(runOutcome.payload, queueKey, runFollowupTurn);
     }
 
-    const { runResult, fallbackProvider, fallbackModel, fallbackAttempts, directlySentBlockKeys } =
-      runOutcome;
+    const {
+      runResult,
+      fallbackProvider,
+      fallbackModel,
+      fallbackAttempts = [],
+      directlySentBlockKeys,
+    } = runOutcome;
     let { didLogHeartbeatStrip, autoCompactionCompleted } = runOutcome;
 
     if (

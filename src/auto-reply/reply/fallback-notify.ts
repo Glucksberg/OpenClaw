@@ -62,9 +62,10 @@ export function checkFallbackNotification(params: {
   originalModel: string;
   usedProvider: string;
   usedModel: string;
-  attempts: FallbackAttempt[];
+  attempts?: FallbackAttempt[];
 }): string | undefined {
-  const { sessionKey, originalProvider, originalModel, usedProvider, usedModel, attempts } = params;
+  const { sessionKey, originalProvider, originalModel, usedProvider, usedModel } = params;
+  const attempts = params.attempts ?? [];
 
   const now = Date.now();
   evictStale(now);
