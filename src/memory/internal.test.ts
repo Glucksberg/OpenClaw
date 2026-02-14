@@ -138,6 +138,21 @@ describe("listMemoryFiles", () => {
     expect(files.some((file) => file.includes("node_modules"))).toBe(false);
     expect(files.some((file) => file.includes(".venv"))).toBe(false);
   });
+
+  it("supports wildcard glob patterns in ignorePaths", async () => {
+    await fs.writeFile(path.join(tmpDir, "MEMORY.md"), "# Default memory");
+    const extraDir = path.join(tmpDir, "extra");
+    await fs.mkdir(extraDir, { recursive: true });
+    await fs.writeFile(path.join(extraDir, "note.md"), "# Note");
+
+    const generatedDir = path.join(extraDir, "generated-build-cache");
+    await fs.mkdir(generatedDir, { recursive: true });
+    await fs.writeFile(path.join(generatedDir, "skip.md"), "# Should be ignored");
+
+    const files = await listMemoryFiles(tmpDir, [extraDir], ["**/generated-*/**"]);
+    expect(files).toHaveLength(2); // MEMORY.md + note.md
+    expect(files.some((file) => file.endsWith("skip.md"))).toBe(false);
+  });
 });
 
 describe("chunkMarkdown", () => {
