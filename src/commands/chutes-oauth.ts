@@ -43,6 +43,16 @@ function parseManualOAuthInput(
   return parsed;
 }
 
+function createDeferred<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+  return { promise, resolve, reject }
+}
+
 function buildAuthorizeUrl(params: {
   clientId: string;
   redirectUri: string;
@@ -195,7 +205,7 @@ export async function loginChutes(params: {
     });
     codeAndState = parseManualOAuthInput(input, state);
   } else {
-    const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
+    const { promise: readyPromise, resolve: resolveReady } = createDeferred<void>();
 
     const callback = waitForLocalCallback({
       redirectUri: params.app.redirectUri,
