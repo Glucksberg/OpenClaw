@@ -347,6 +347,13 @@ function resolveConfiguredPlugins(
 }
 
 function isPluginExplicitlyDisabled(cfg: OpenClawConfig, pluginId: string): boolean {
+  const channelId = normalizeChatChannelId(pluginId);
+  if (channelId) {
+    const channel = resolveChannelConfig(cfg, channelId);
+    if (channel?.enabled === false) {
+      return true;
+    }
+  }
   const entry = cfg.plugins?.entries?.[pluginId];
   return entry?.enabled === false;
 }
@@ -402,7 +409,38 @@ function ensureAllowlisted(cfg: OpenClawConfig, pluginId: string): OpenClawConfi
   };
 }
 
+function isBuiltInChannel(pluginId: string): boolean {
+  return normalizeChatChannelId(pluginId) !== null;
+}
+
+function isAutoEnableActive(cfg: OpenClawConfig, pluginId: string): boolean {
+  const channelId = normalizeChatChannelId(pluginId);
+  if (channelId) {
+    return resolveChannelConfig(cfg, channelId)?.enabled === true;
+  }
+  return cfg.plugins?.entries?.[pluginId]?.enabled === true;
+}
+
+function enableBuiltInChannel(cfg: OpenClawConfig, channelId: string): OpenClawConfig {
+  return {
+    ...cfg,
+    channels: {
+      ...cfg.channels,
+      [channelId]: {
+        ...resolveChannelConfig(cfg, channelId),
+        enabled: true,
+      },
+    },
+  };
+}
+
 function registerPluginEntry(cfg: OpenClawConfig, pluginId: string): OpenClawConfig {
+  if (isBuiltInChannel(pluginId)) {
+    const channelId = normalizeChatChannelId(pluginId);
+    if (channelId) {
+      return enableBuiltInChannel(cfg, channelId);
+    }
+  }
   const entries = {
     ...cfg.plugins?.entries,
     [pluginId]: {
@@ -458,7 +496,7 @@ export function applyPluginAutoEnable(params: {
     }
     const allow = next.plugins?.allow;
     const allowMissing = Array.isArray(allow) && !allow.includes(entry.pluginId);
-    const alreadyEnabled = next.plugins?.entries?.[entry.pluginId]?.enabled === true;
+    const alreadyEnabled = isAutoEnableActive(next, entry.pluginId);
     if (alreadyEnabled && !allowMissing) {
       continue;
     }
