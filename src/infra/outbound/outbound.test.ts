@@ -986,3 +986,134 @@ describe("resolveOutboundTarget", () => {
     }
   });
 });
+
+describe("resolveSessionDeliveryTarget", () => {
+  it("derives implicit delivery from the last route", () => {
+    const resolved = resolveSessionDeliveryTarget({
+      entry: {
+        sessionId: "sess-1",
+        updatedAt: 1,
+        lastChannel: " whatsapp ",
+        lastTo: " +1555 ",
+        lastAccountId: " acct-1 ",
+      },
+      requestedChannel: "last",
+    });
+
+    expect(resolved).toEqual({
+      channel: "whatsapp",
+      to: "+1555",
+      accountId: "acct-1",
+      threadId: undefined,
+      threadIdExplicit: false,
+      mode: "implicit",
+      lastChannel: "whatsapp",
+      lastTo: "+1555",
+      lastAccountId: "acct-1",
+      lastThreadId: undefined,
+    });
+  });
+
+  it("prefers explicit targets without reusing lastTo", () => {
+    const resolved = resolveSessionDeliveryTarget({
+      entry: {
+        sessionId: "sess-2",
+        updatedAt: 1,
+        lastChannel: "whatsapp",
+        lastTo: "+1555",
+      },
+      requestedChannel: "telegram",
+    });
+
+    expect(resolved).toEqual({
+      channel: "telegram",
+      to: undefined,
+      accountId: undefined,
+      threadId: undefined,
+      threadIdExplicit: false,
+      mode: "implicit",
+      lastChannel: "whatsapp",
+      lastTo: "+1555",
+      lastAccountId: undefined,
+      lastThreadId: undefined,
+    });
+  });
+
+  it("allows mismatched lastTo when configured", () => {
+    const resolved = resolveSessionDeliveryTarget({
+      entry: {
+        sessionId: "sess-3",
+        updatedAt: 1,
+        lastChannel: "whatsapp",
+        lastTo: "+1555",
+      },
+      requestedChannel: "telegram",
+      allowMismatchedLastTo: true,
+    });
+
+    expect(resolved).toEqual({
+      channel: "telegram",
+      to: "+1555",
+      accountId: undefined,
+      threadId: undefined,
+      threadIdExplicit: false,
+      mode: "implicit",
+      lastChannel: "whatsapp",
+      lastTo: "+1555",
+      lastAccountId: undefined,
+      lastThreadId: undefined,
+    });
+  });
+
+  it("falls back to a provided channel when requested is unsupported", () => {
+    const resolved = resolveSessionDeliveryTarget({
+      entry: {
+        sessionId: "sess-4",
+        updatedAt: 1,
+        lastChannel: "whatsapp",
+        lastTo: "+1555",
+      },
+      requestedChannel: "webchat",
+      fallbackChannel: "slack",
+    });
+
+    expect(resolved).toEqual({
+      channel: "slack",
+      to: undefined,
+      accountId: undefined,
+      threadId: undefined,
+      threadIdExplicit: false,
+      mode: "implicit",
+      lastChannel: "whatsapp",
+      lastTo: "+1555",
+      lastAccountId: undefined,
+      lastThreadId: undefined,
+    });
+  });
+
+  it("extracts telegram topic thread id from explicit targets", () => {
+    const resolved = resolveSessionDeliveryTarget({
+      entry: {
+        sessionId: "sess-5",
+        updatedAt: 1,
+        lastChannel: "telegram",
+        lastTo: "-1001111111111:topic:999",
+        lastThreadId: 999,
+      },
+      requestedChannel: "telegram",
+      explicitTo: "-1001234567890:topic:123",
+    });
+
+    expect(resolved).toEqual({
+      channel: "telegram",
+      to: "-1001234567890:topic:123",
+      accountId: undefined,
+      threadId: 123,
+      mode: "explicit",
+      lastChannel: "telegram",
+      lastTo: "-1001111111111:topic:999",
+      lastAccountId: undefined,
+      lastThreadId: 999,
+    });
+  });
+});
