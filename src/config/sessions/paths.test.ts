@@ -1,5 +1,7 @@
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { OpenClawConfig } from "../types.js";
+import * as configModule from "../config.js";
 import {
   resolveSessionFilePath,
   resolveSessionFilePathOptions,
@@ -162,6 +164,29 @@ describe("session path safety", () => {
     expect(resolved).toBe(path.resolve(opsSessionFile));
   });
 
+  it("uses configured custom agentDir fallback for absolute sessionFile paths", () => {
+    const mainSessionsDir = "/tmp/openclaw/agents/main/sessions";
+    const customAgentDir = "/srv/custom/ops-agent";
+    const opsSessionFile = path.join(customAgentDir, "sessions", "abc-123.jsonl");
+    const cfg: OpenClawConfig = {
+      agents: {
+        list: [{ id: "ops", agentDir: customAgentDir }],
+      },
+    };
+    const loadConfigSpy = vi.spyOn(configModule, "loadConfig").mockReturnValue(cfg);
+    try {
+      const resolved = resolveSessionFilePath(
+        "sess-1",
+        { sessionFile: opsSessionFile },
+        { sessionsDir: mainSessionsDir, agentId: "ops" },
+      );
+
+      expect(resolved).toBe(path.resolve(opsSessionFile));
+    } finally {
+      loadConfigSpy.mockRestore();
+    }
+  });
+
   it("uses agent sessions dir fallback for transcript path", () => {
     const resolved = resolveSessionTranscriptPath("sess-1", "main");
     expect(resolved.endsWith(path.join("agents", "main", "sessions", "sess-1.jsonl"))).toBe(true);
@@ -186,6 +211,19 @@ describe("session path safety", () => {
     expect(opts).toEqual({
       sessionsDir: path.resolve("/srv/custom/agents/ops/sessions"),
       agentId: "ops",
+    });
+  });
+
+  it("keeps agentDir when resolving session file options", () => {
+    const opts = resolveSessionFilePathOptions({
+      storePath: "/tmp/custom/agent-store/sessions.json",
+      agentId: "ops",
+      agentDir: "/srv/custom/ops-agent",
+    });
+    expect(opts).toEqual({
+      sessionsDir: path.resolve("/tmp/custom/agent-store"),
+      agentId: "ops",
+      agentDir: path.resolve("/srv/custom/ops-agent"),
     });
   });
 

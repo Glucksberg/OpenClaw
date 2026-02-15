@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { expandHomePrefix, resolveRequiredHomeDir } from "../../infra/home-dir.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../../routing/session-key.js";
+import { loadConfig } from "../config.js";
 import { resolveStateDir } from "../paths.js";
 
 function resolveAgentSessionsDir(
@@ -35,21 +36,34 @@ export function resolveDefaultSessionStorePath(agentId?: string): string {
 
 export type SessionFilePathOptions = {
   agentId?: string;
+  agentDir?: string;
   sessionsDir?: string;
 };
 
 export function resolveSessionFilePathOptions(params: {
   agentId?: string;
+  agentDir?: string;
   storePath?: string;
 }): SessionFilePathOptions | undefined {
   const agentId = params.agentId?.trim();
+  const agentDir = params.agentDir?.trim();
   const storePath = params.storePath?.trim();
   if (storePath) {
     const sessionsDir = path.dirname(path.resolve(storePath));
-    return agentId ? { sessionsDir, agentId } : { sessionsDir };
+    if (agentId || agentDir) {
+      return {
+        sessionsDir,
+        ...(agentId ? { agentId } : {}),
+        ...(agentDir ? { agentDir: path.resolve(agentDir) } : {}),
+      };
+    }
+    return { sessionsDir };
   }
-  if (agentId) {
-    return { agentId };
+  if (agentId || agentDir) {
+    return {
+      ...(agentId ? { agentId } : {}),
+      ...(agentDir ? { agentDir: path.resolve(agentDir) } : {}),
+    };
   }
   return undefined;
 }
@@ -70,6 +84,31 @@ function resolveSessionsDir(opts?: SessionFilePathOptions): string {
     return path.resolve(sessionsDir);
   }
   return resolveAgentSessionsDir(opts?.agentId);
+}
+
+function resolveConfiguredAgentDir(agentId: string): string | undefined {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  try {
+    const cfg = loadConfig();
+    const configured = cfg.agents?.list
+      ?.find((entry) => normalizeAgentId(entry.id) === normalizedAgentId)
+      ?.agentDir?.trim();
+    if (!configured) {
+      return undefined;
+    }
+    return path.resolve(configured);
+  } catch {
+    // Best-effort fallback only.
+    return undefined;
+  }
+}
+
+function resolveCustomAgentSessionsDir(agentId: string, agentDir?: string): string | undefined {
+  const configured = agentDir?.trim() || resolveConfiguredAgentDir(agentId);
+  if (!configured) {
+    return undefined;
+  }
+  return path.join(path.resolve(configured), "sessions");
 }
 
 function resolvePathFromAgentSessionsDir(
@@ -115,7 +154,7 @@ function extractAgentIdFromAbsoluteSessionPath(candidateAbsPath: string): string
 function resolvePathWithinSessionsDir(
   sessionsDir: string,
   candidate: string,
-  opts?: { agentId?: string },
+  opts?: { agentId?: string; agentDir?: string },
 ): string {
   const trimmed = candidate.trim();
   if (!trimmed) {
@@ -127,7 +166,7 @@ function resolvePathWithinSessionsDir(
   // convert them to relative so the containment check passes.
   const normalized = path.isAbsolute(trimmed) ? path.relative(resolvedBase, trimmed) : trimmed;
   if (normalized.startsWith("..") && path.isAbsolute(trimmed)) {
-    const tryAgentFallback = (agentId: string): string | undefined => {
+    const tryAgentFallback = (agentId: string, agentDir?: string): string | undefined => {
       const normalizedAgentId = normalizeAgentId(agentId);
       const siblingSessionsDir = resolveSiblingAgentSessionsDir(resolvedBase, normalizedAgentId);
       if (siblingSessionsDir) {
@@ -136,12 +175,19 @@ function resolvePathWithinSessionsDir(
           return siblingResolved;
         }
       }
+      const customAgentSessionsDir = resolveCustomAgentSessionsDir(normalizedAgentId, agentDir);
+      if (customAgentSessionsDir) {
+        const customResolved = resolvePathFromAgentSessionsDir(customAgentSessionsDir, trimmed);
+        if (customResolved) {
+          return customResolved;
+        }
+      }
       return resolvePathFromAgentSessionsDir(resolveAgentSessionsDir(normalizedAgentId), trimmed);
     };
 
     const explicitAgentId = opts?.agentId?.trim();
     if (explicitAgentId) {
-      const resolvedFromAgent = tryAgentFallback(explicitAgentId);
+      const resolvedFromAgent = tryAgentFallback(explicitAgentId, opts?.agentDir);
       if (resolvedFromAgent) {
         return resolvedFromAgent;
       }
@@ -195,7 +241,10 @@ export function resolveSessionFilePath(
   const sessionsDir = resolveSessionsDir(opts);
   const candidate = entry?.sessionFile?.trim();
   if (candidate) {
-    return resolvePathWithinSessionsDir(sessionsDir, candidate, { agentId: opts?.agentId });
+    return resolvePathWithinSessionsDir(sessionsDir, candidate, {
+      agentId: opts?.agentId,
+      agentDir: opts?.agentDir,
+    });
   }
   return resolveSessionTranscriptPathInDir(sessionId, sessionsDir);
 }
