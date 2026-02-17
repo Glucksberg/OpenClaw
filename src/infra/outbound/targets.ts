@@ -10,6 +10,10 @@ import type {
   DeliverableMessageChannel,
   GatewayMessageChannel,
 } from "../../utils/message-channel.js";
+import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { formatCliCommand } from "../../cli/command-format.js";
+import { normalizeAccountId } from "../../routing/session-key.js";
+import { parseTelegramTarget } from "../../telegram/targets.js";
 import {
   INTERNAL_MESSAGE_CHANNEL,
   isDeliverableMessageChannel,
@@ -100,13 +104,15 @@ export function resolveSessionDeliveryTarget(params: {
 
   const accountId = channel && channel === lastChannel ? lastAccountId : undefined;
   const threadId = channel && channel === lastChannel ? lastThreadId : undefined;
+  const threadIdFromTarget =
+    channel === "telegram" && to ? parseTelegramTarget(to).messageThreadId : undefined;
   const mode = params.mode ?? (explicitTo ? "explicit" : "implicit");
 
   return {
     channel,
     to,
     accountId,
-    threadId: explicitThreadId ?? threadId,
+    threadId: explicitThreadId ?? threadIdFromTarget ?? threadId,
     mode,
     lastChannel,
     lastTo,

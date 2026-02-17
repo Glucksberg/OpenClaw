@@ -14,6 +14,7 @@ import {
 } from "../../infra/outbound/targets.js";
 import { buildChannelAccountBindings } from "../../routing/bindings.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
+import { parseTelegramTarget } from "../../telegram/targets.js";
 
 export async function resolveDeliveryTarget(
   cfg: OpenClawConfig,
@@ -71,6 +72,10 @@ export async function resolveDeliveryTarget(
   const channel = resolved.channel ?? fallbackChannel ?? DEFAULT_CHAT_CHANNEL;
   const mode = resolved.mode as "explicit" | "implicit";
   const toCandidate = resolved.to;
+  const threadIdFromTarget =
+    channel === "telegram" && toCandidate
+      ? parseTelegramTarget(toCandidate).messageThreadId
+      : undefined;
 
   // When the session has no lastAccountId (e.g. first-run isolated cron
   // session), fall back to the agent's bound account from bindings config.
@@ -91,9 +96,10 @@ export async function resolveDeliveryTarget(
   // supergroup topic) from being sent to a different target (e.g. a private
   // chat) where they would cause API errors.
   const threadId =
-    resolved.threadId && resolved.to && resolved.to === resolved.lastTo
+    threadIdFromTarget ??
+    (resolved.threadId && resolved.to && resolved.to === resolved.lastTo
       ? resolved.threadId
-      : undefined;
+      : undefined);
 
   if (!toCandidate) {
     return {
