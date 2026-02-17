@@ -28,6 +28,7 @@ type ChannelRuntimeStore = {
   aborts: Map<string, AbortController>;
   tasks: Map<string, Promise<unknown>>;
   runtimes: Map<string, ChannelAccountSnapshot>;
+  restartAttempts: Map<string, number>;
 };
 
 function createRuntimeStore(): ChannelRuntimeStore {
@@ -35,6 +36,7 @@ function createRuntimeStore(): ChannelRuntimeStore {
     aborts: new Map(),
     tasks: new Map(),
     runtimes: new Map(),
+    restartAttempts: new Map(),
   };
 }
 
@@ -60,6 +62,16 @@ type ChannelManagerOptions = {
   channelLogs: Record<ChannelId, SubsystemLogger>;
   channelRuntimeEnvs: Record<ChannelId, RuntimeEnv>;
 };
+
+const CHANNEL_RESTART_POLICY = {
+  initialMs: 2000,
+  maxMs: 30_000,
+  factor: 1.8,
+  jitter: 0.25,
+};
+
+// Reset backoff after the channel has stayed up long enough to be considered recovered.
+const CHANNEL_RESTART_SUCCESS_UPTIME_MS = 10_000;
 
 export type ChannelManager = {
   getRuntimeSnapshot: () => ChannelRuntimeSnapshot;
@@ -134,6 +146,8 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
           ? plugin.config.isEnabled(account, cfg)
           : isAccountEnabled(account);
         if (!enabled) {
+          store.aborts.delete(id);
+          store.restartAttempts.delete(id);
           setRuntime(channelId, id, {
             accountId: id,
             running: false,
@@ -147,6 +161,8 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
           configured = await plugin.config.isConfigured(account, cfg);
         }
         if (!configured) {
+          store.aborts.delete(id);
+          store.restartAttempts.delete(id);
           setRuntime(channelId, id, {
             accountId: id,
             running: false,
@@ -170,6 +186,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
         });
 
         const log = channelLogs[channelId];
+        const startedAt = Date.now();
         const task = startAccount({
           cfg,
           accountId: id,
@@ -187,7 +204,6 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
             log.error?.(`[${id}] channel exited: ${message}`);
           })
           .finally(() => {
-            store.aborts.delete(id);
             store.tasks.delete(id);
             setRuntime(channelId, id, {
               accountId: id,
@@ -196,29 +212,55 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
             });
           })
           .then(async () => {
-            if (manuallyStopped.has(rKey)) {
+            if (abort.signal.aborted) {
+              if (store.aborts.get(id) === abort) {
+                store.aborts.delete(id);
+              }
+              store.restartAttempts.delete(id);
               return;
             }
-            const attempt = (restartAttempts.get(rKey) ?? 0) + 1;
-            restartAttempts.set(rKey, attempt);
-            if (attempt > MAX_RESTART_ATTEMPTS) {
-              log.error?.(`[${id}] giving up after ${MAX_RESTART_ATTEMPTS} restart attempts`);
-              return;
+
+            if (Date.now() - startedAt >= CHANNEL_RESTART_SUCCESS_UPTIME_MS) {
+              store.restartAttempts.delete(id);
             }
+            const attempt = (store.restartAttempts.get(id) ?? 0) + 1;
+            store.restartAttempts.set(id, attempt);
             const delayMs = computeBackoff(CHANNEL_RESTART_POLICY, attempt);
-            log.info?.(
-              `[${id}] auto-restart attempt ${attempt}/${MAX_RESTART_ATTEMPTS} in ${Math.round(delayMs / 1000)}s`,
+            log.warn?.(
+              `[${id}] channel exited unexpectedly; restarting in ${delayMs}ms (attempt ${attempt})`,
             );
-            setRuntime(channelId, id, {
-              accountId: id,
-              reconnectAttempts: attempt,
-            });
-            try {
-              await sleepWithAbort(delayMs);
-              await startChannel(channelId, id);
-            } catch {
-              // abort or startup failure — next crash will retry
-            }
+
+            void (async () => {
+              try {
+                await sleepWithAbort(delayMs, abort.signal);
+              } catch (err) {
+                if (abort.signal.aborted) {
+                  if (store.aborts.get(id) === abort) {
+                    store.aborts.delete(id);
+                  }
+                  return;
+                }
+                log.error?.(`[${id}] restart wait failed: ${formatErrorMessage(err)}`);
+                return;
+              }
+
+              if (abort.signal.aborted) {
+                if (store.aborts.get(id) === abort) {
+                  store.aborts.delete(id);
+                }
+                return;
+              }
+              if (store.aborts.get(id) !== abort) {
+                return;
+              }
+
+              store.aborts.delete(id);
+              try {
+                await startChannel(channelId, id);
+              } catch (err) {
+                log.error?.(`[${id}] restart failed: ${formatErrorMessage(err)}`);
+              }
+            })();
           });
         store.tasks.set(id, tracked);
       }),
@@ -272,6 +314,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
         }
         store.aborts.delete(id);
         store.tasks.delete(id);
+        store.restartAttempts.delete(id);
         setRuntime(channelId, id, {
           accountId: id,
           running: false,

@@ -55,10 +55,13 @@ function removeNewSignalListeners(
 }
 
 describe("runGatewayLoop", () => {
-  it("restarts after SIGUSR1 even when drain times out, and resets lanes for the new iteration", async () => {
+  it("debounces rapid SIGUSR1 restarts and resets lanes on each allowed restart", async () => {
     vi.clearAllMocks();
     getActiveTaskCount.mockReturnValueOnce(2).mockReturnValueOnce(0);
     waitForActiveTasks.mockResolvedValueOnce({ drained: false });
+    const dateNow = vi.spyOn(Date, "now");
+    let now = 1_000;
+    dateNow.mockImplementation(() => now);
 
     type StartServer = () => Promise<{
       close: (opts: { reason: string; restartExpectedMs: number | null }) => Promise<void>;
@@ -128,6 +131,17 @@ describe("runGatewayLoop", () => {
 
       process.emit("SIGUSR1");
 
+      await vi.waitFor(() => {
+        expect(start).toHaveBeenCalledTimes(2);
+      });
+      expect(markGatewaySigusr1RestartHandled).toHaveBeenCalledTimes(1);
+      expect(gatewayLog.info).toHaveBeenCalledWith(
+        "SIGUSR1 restart ignored during cooldown (2000ms remaining)",
+      );
+
+      now = 3_001;
+      process.emit("SIGUSR1");
+
       await expect(loopPromise).rejects.toThrow("stop-loop");
       expect(closeSecond).toHaveBeenCalledWith({
         reason: "gateway restarting",
@@ -136,6 +150,7 @@ describe("runGatewayLoop", () => {
       expect(markGatewaySigusr1RestartHandled).toHaveBeenCalledTimes(2);
       expect(resetAllLanes).toHaveBeenCalledTimes(2);
     } finally {
+      dateNow.mockRestore();
       removeNewSignalListeners("SIGTERM", beforeSigterm);
       removeNewSignalListeners("SIGINT", beforeSigint);
       removeNewSignalListeners("SIGUSR1", beforeSigusr1);

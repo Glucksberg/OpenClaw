@@ -27,6 +27,8 @@ export async function runGatewayLoop(params: {
   let server: Awaited<ReturnType<typeof startGatewayServer>> | null = null;
   let shuttingDown = false;
   let restartResolver: (() => void) | null = null;
+  let sigusr1RestartCooldownUntil = 0;
+  const SIGUSR1_RESTART_COOLDOWN_MS = 2000;
 
   const cleanupSignals = () => {
     process.removeListener("SIGTERM", onSigterm);
@@ -101,6 +103,7 @@ export async function runGatewayLoop(params: {
               gatewayLog.info("restart mode: in-process restart (OPENCLAW_NO_RESPAWN)");
             }
             shuttingDown = false;
+            sigusr1RestartCooldownUntil = Date.now() + SIGUSR1_RESTART_COOLDOWN_MS;
             restartResolver?.();
           }
         } else {
@@ -121,6 +124,13 @@ export async function runGatewayLoop(params: {
   };
   const onSigusr1 = () => {
     gatewayLog.info("signal SIGUSR1 received");
+    const now = Date.now();
+    if (now < sigusr1RestartCooldownUntil) {
+      gatewayLog.info(
+        `SIGUSR1 restart ignored during cooldown (${sigusr1RestartCooldownUntil - now}ms remaining)`,
+      );
+      return;
+    }
     const authorized = consumeGatewaySigusr1RestartAuthorization();
     if (!authorized && !isGatewaySigusr1RestartExternallyAllowed()) {
       gatewayLog.warn(
