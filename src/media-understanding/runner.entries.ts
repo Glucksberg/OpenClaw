@@ -17,6 +17,25 @@ import { resolveProxyFetchFromEnv } from "../infra/net/proxy-fetch.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { runExec } from "../process/exec.js";
 import { MediaAttachmentCache } from "./attachments.js";
+import {
+  CLI_OUTPUT_MAX_BUFFER,
+  DEFAULT_AUDIO_MODELS,
+  DEFAULT_TIMEOUT_SECONDS,
+} from "./defaults.js";
+import { MediaUnderstandingSkipError } from "./errors.js";
+import { fileExists } from "./fs.js";
+import { extractGeminiResponse } from "./output-extract.js";
+import { describeImageWithModel } from "./providers/image.js";
+import { getMediaUnderstandingProvider, normalizeMediaProviderId } from "./providers/index.js";
+import { resolveMaxBytes, resolveMaxChars, resolvePrompt, resolveTimeoutMs } from "./resolve.js";
+import type {
+  MediaUnderstandingCapability,
+  MediaUnderstandingDecision,
+  MediaUnderstandingModelDecision,
+  MediaUnderstandingOutput,
+  MediaUnderstandingProvider,
+} from "./types.js";
+import { estimateBase64Size, resolveVideoMaxBase64Bytes } from "./video.js";
 
 /**
  * Legacy placeholder aliases for CLI args.
@@ -45,6 +64,7 @@ export function normalizePlaceholders(value: string): string {
   }
   return result;
 }
+<<<<<<< HEAD
 import {
   CLI_OUTPUT_MAX_BUFFER,
   DEFAULT_AUDIO_MODELS,
@@ -65,6 +85,8 @@ import type {
   MediaUnderstandingProvider,
 } from "./types.js";
 import { estimateBase64Size, resolveVideoMaxBase64Bytes } from "./video.js";
+=======
+>>>>>>> 0b16507aa (fix(media-understanding): move runner imports to top-level)
 
 export type ProviderRegistry = Map<string, MediaUnderstandingProvider>;
 
