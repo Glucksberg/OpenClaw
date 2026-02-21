@@ -37,7 +37,7 @@ import {
   normalizeOutboundPayloads,
   normalizeOutboundPayloadsForJson,
 } from "./payloads.js";
-import { resolveOutboundTarget } from "./targets.js";
+import { resolveOutboundTarget, resolveSessionDeliveryTarget } from "./targets.js";
 
 describe("delivery-queue", () => {
   let tmpDir: string;
@@ -1106,9 +1106,10 @@ describe("resolveSessionDeliveryTarget", () => {
 
     expect(resolved).toEqual({
       channel: "telegram",
-      to: "-1001234567890:topic:123",
+      to: "-1001234567890",
       accountId: undefined,
       threadId: 123,
+      threadIdExplicit: true,
       mode: "explicit",
       lastChannel: "telegram",
       lastTo: "-1001111111111:topic:999",
