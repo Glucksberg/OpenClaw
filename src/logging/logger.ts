@@ -37,6 +37,7 @@ function resolveNodeRequire(): ((id: string) => NodeJS.Require) | null {
 }
 
 const requireConfig = resolveNodeRequire()?.(import.meta.url) ?? null;
+let resolvingSettings = false;
 
 export type LoggerSettings = {
   level?: LogLevel;
@@ -57,6 +58,13 @@ export type LogTransport = (logObj: LogTransportRecord) => void;
 
 const externalTransports = new Set<LogTransport>();
 
+function resolveFallbackSettings(): ResolvedSettings {
+  const override = loggingState.overrideSettings as LoggerSettings | null;
+  const level = normalizeLogLevel(override?.level, "info");
+  const file = override?.file ?? defaultRollingPathForToday();
+  return { level, file };
+}
+
 function attachExternalTransport(logger: TsLogger<LogObj>, transport: LogTransport): void {
   logger.attachTransport((logObj: LogObj) => {
     if (!externalTransports.has(transport)) {
@@ -71,25 +79,38 @@ function attachExternalTransport(logger: TsLogger<LogObj>, transport: LogTranspo
 }
 
 function resolveSettings(): ResolvedSettings {
-  let cfg: OpenClawConfig["logging"] | undefined =
-    (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
-  if (!cfg) {
-    try {
-      const loaded = requireConfig?.("../config/config.js") as
-        | {
-            loadConfig?: () => OpenClawConfig;
-          }
-        | undefined;
-      cfg = loaded?.loadConfig?.().logging;
-    } catch {
-      cfg = undefined;
-    }
+  // Reentrancy guard: config loading can log errors, and console capture routes
+  // those logs back through getLogger(). In that case, avoid recursive loadConfig().
+  if (resolvingSettings) {
+    return resolveFallbackSettings();
   }
-  const defaultLevel =
-    process.env.VITEST === "true" && process.env.OPENCLAW_TEST_FILE_LOG !== "1" ? "silent" : "info";
-  const level = normalizeLogLevel(cfg?.level, defaultLevel);
-  const file = cfg?.file ?? defaultRollingPathForToday();
-  return { level, file };
+  resolvingSettings = true;
+
+  try {
+    let cfg: OpenClawConfig["logging"] | undefined =
+      (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
+    if (!cfg) {
+      try {
+        const loaded = requireConfig?.("../config/config.js") as
+          | {
+              loadConfig?: () => OpenClawConfig;
+            }
+          | undefined;
+        cfg = loaded?.loadConfig?.().logging;
+      } catch {
+        cfg = undefined;
+      }
+    }
+    const defaultLevel =
+      process.env.VITEST === "true" && process.env.OPENCLAW_TEST_FILE_LOG !== "1"
+        ? "silent"
+        : "info";
+    const level = normalizeLogLevel(cfg?.level, defaultLevel);
+    const file = cfg?.file ?? defaultRollingPathForToday();
+    return { level, file };
+  } finally {
+    resolvingSettings = false;
+  }
 }
 
 function settingsChanged(a: ResolvedSettings | null, b: ResolvedSettings) {
