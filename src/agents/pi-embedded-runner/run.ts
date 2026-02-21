@@ -31,6 +31,7 @@ import {
   classifyFailoverReason,
   formatAssistantErrorText,
   isAuthAssistantError,
+  isBillingAssistantError,
   isCompactionFailureError,
   isLikelyContextOverflowError,
   isFailoverAssistantError,
@@ -916,6 +917,7 @@ export async function runEmbeddedPiAgent(
           }
 
           const authFailure = isAuthAssistantError(lastAssistant);
+          const billingFailure = isBillingAssistantError(lastAssistant);
           const rateLimitFailure = isRateLimitAssistantError(lastAssistant);
           const failoverFailure = isFailoverAssistantError(lastAssistant);
           const assistantFailoverReason = classifyFailoverReason(lastAssistant?.errorMessage ?? "");
