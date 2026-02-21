@@ -7,7 +7,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { AuthProfileStore } from "./auth-profiles.js";
 import { saveAuthProfileStore } from "./auth-profiles.js";
 import { AUTH_STORE_VERSION } from "./auth-profiles/constants.js";
-import { runWithModelFallback } from "./model-fallback.js";
+import { runWithImageModelFallback, runWithModelFallback } from "./model-fallback.js";
 
 function makeCfg(overrides: Partial<OpenClawConfig> = {}): OpenClawConfig {
   return {
@@ -46,6 +46,19 @@ function makeProviderFallbackCfg(provider: string): OpenClawConfig {
       },
     },
   });
+}
+
+function makeImageCfg(params: { primary: string; fallbacks?: string[] }): OpenClawConfig {
+  return {
+    agents: {
+      defaults: {
+        imageModel: {
+          primary: params.primary,
+          fallbacks: params.fallbacks ?? [],
+        },
+      },
+    },
+  } as OpenClawConfig;
 }
 
 async function withTempAuthStore<T>(
@@ -723,6 +736,63 @@ describe("provider circuit breaker", () => {
     expect(calls).toEqual([
       { provider: "anthropic", model: "opus" },
       { provider: "anthropic", model: "sonnet" },
+    ]);
+  });
+});
+
+describe("provider circuit breaker (image models)", () => {
+  it("skips same-provider candidates after auth failure", async () => {
+    const cfg = makeImageCfg({
+      primary: "anthropic/opus-image",
+      fallbacks: ["openai/bad-image", "anthropic/sonnet-image", "openai/good-image"],
+    });
+    const calls: Array<{ provider: string; model: string }> = [];
+
+    const result = await runWithImageModelFallback({
+      cfg,
+      run: async (provider, model) => {
+        calls.push({ provider, model });
+        if (provider === "anthropic") {
+          throw Object.assign(new Error("Unauthorized"), { status: 401 });
+        }
+        if (model === "bad-image") {
+          throw Object.assign(new Error("rate limit"), { status: 429 });
+        }
+        return "ok-image";
+      },
+    });
+
+    expect(result.result).toBe("ok-image");
+    expect(calls).toEqual([
+      { provider: "anthropic", model: "opus-image" },
+      { provider: "openai", model: "bad-image" },
+      { provider: "openai", model: "good-image" },
+    ]);
+    expect(result.attempts.find((a) => a.model === "sonnet-image")?.reason).toBe("auth");
+  });
+
+  it("does NOT skip same-provider on rate_limit", async () => {
+    const cfg = makeImageCfg({
+      primary: "anthropic/opus-image",
+      fallbacks: ["anthropic/sonnet-image"],
+    });
+    const calls: Array<{ provider: string; model: string }> = [];
+
+    const result = await runWithImageModelFallback({
+      cfg,
+      run: async (provider, model) => {
+        calls.push({ provider, model });
+        if (model === "opus-image") {
+          throw Object.assign(new Error("rate limit exceeded"), { status: 429 });
+        }
+        return "ok-sonnet-image";
+      },
+    });
+
+    expect(result.result).toBe("ok-sonnet-image");
+    expect(calls).toEqual([
+      { provider: "anthropic", model: "opus-image" },
+      { provider: "anthropic", model: "sonnet-image" },
     ]);
   });
 });
