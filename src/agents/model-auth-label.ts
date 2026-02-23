@@ -8,6 +8,7 @@ import {
 import { getCustomProviderApiKey, resolveEnvApiKey } from "./model-auth.js";
 import { normalizeProviderId } from "./model-selection.js";
 
+
 export function resolveModelAuthLabel(params: {
   provider?: string;
   cfg?: OpenClawConfig;
