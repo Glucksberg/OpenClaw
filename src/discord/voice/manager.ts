@@ -160,6 +160,8 @@ type OpusDecoder = {
 let warnedOpusMissing = false;
 
 function createOpusDecoder(): { decoder: OpusDecoder; name: string } | null {
+  // @discordjs/opus is the preferred native decoder but may not be available
+  // on all platforms (e.g. arm64). Falls back to the pure-JS opusscript.
   try {
     const OpusScript = require("opusscript") as {
       new (sampleRate: number, channels: number, application: number): OpusDecoder;
