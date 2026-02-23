@@ -29,6 +29,23 @@ export function withBrowserNavigationPolicy(
   return ssrfPolicy ? { ssrfPolicy } : {};
 }
 
+/**
+ * For loopback CDP profiles the browser already runs on the same host, so
+ * navigating to private/loopback addresses (e.g. http://localhost:3000) is
+ * legitimate and carries no SSRF risk.  Automatically merge
+ * `allowPrivateNetwork: true` into the policy when the profile is loopback.
+ */
+export function withLoopbackNavigationPolicy(
+  ssrfPolicy: SsrFPolicy | undefined,
+  cdpIsLoopback: boolean,
+): BrowserNavigationPolicyOptions {
+  if (!cdpIsLoopback) {
+    return withBrowserNavigationPolicy(ssrfPolicy);
+  }
+  const merged: SsrFPolicy = { ...ssrfPolicy, allowPrivateNetwork: true };
+  return { ssrfPolicy: merged };
+}
+
 export async function assertBrowserNavigationAllowed(
   opts: {
     url: string;

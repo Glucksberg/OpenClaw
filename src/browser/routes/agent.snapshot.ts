@@ -6,7 +6,7 @@ import {
   DEFAULT_AI_SNAPSHOT_EFFICIENT_MAX_CHARS,
   DEFAULT_AI_SNAPSHOT_MAX_CHARS,
 } from "../constants.js";
-import { withBrowserNavigationPolicy } from "../navigation-guard.js";
+import { withLoopbackNavigationPolicy } from "../navigation-guard.js";
 import {
   DEFAULT_BROWSER_SCREENSHOT_MAX_BYTES,
   DEFAULT_BROWSER_SCREENSHOT_MAX_SIDE,
@@ -105,7 +105,10 @@ export function registerBrowserAgentSnapshotRoutes(
           cdpUrl,
           targetId: tab.targetId,
           url,
-          ...withBrowserNavigationPolicy(ctx.state().resolved.ssrfPolicy),
+          ...withLoopbackNavigationPolicy(
+            ctx.state().resolved.ssrfPolicy,
+            profileCtx.profile.cdpIsLoopback,
+          ),
         });
         const currentTargetId = await resolveTargetIdAfterNavigate({
           oldTargetId: tab.targetId,

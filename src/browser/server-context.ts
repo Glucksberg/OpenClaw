@@ -19,7 +19,7 @@ import {
   assertBrowserNavigationAllowed,
   assertBrowserNavigationResultAllowed,
   InvalidBrowserNavigationUrlError,
-  withBrowserNavigationPolicy,
+  withLoopbackNavigationPolicy,
 } from "./navigation-guard.js";
 import type { PwAiModule } from "./pw-ai-module.js";
 import { getPwAiModule } from "./pw-ai-module.js";
@@ -137,7 +137,10 @@ function createProfileContext(
   };
 
   const openTab = async (url: string): Promise<BrowserTab> => {
-    const ssrfPolicyOpts = withBrowserNavigationPolicy(state().resolved.ssrfPolicy);
+    const ssrfPolicyOpts = withLoopbackNavigationPolicy(
+      state().resolved.ssrfPolicy,
+      profile.cdpIsLoopback,
+    );
 
     // For remote profiles, use Playwright's persistent connection to create tabs
     // This ensures the tab persists beyond a single request
