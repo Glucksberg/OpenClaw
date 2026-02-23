@@ -123,12 +123,19 @@ function tryExtractPlistLabel(contents: string): string | null {
   return match[1]?.trim() || null;
 }
 
+/**
+ * Known non-gateway openclaw service names that should NOT be flagged
+ * as duplicate gateway instances by the doctor command.
+ */
+const KNOWN_NON_GATEWAY_LAUNCHD_LABELS = new Set(["ai.openclaw.browser", "ai.openclaw.node"]);
+const KNOWN_NON_GATEWAY_SYSTEMD_NAMES = new Set(["openclaw-browser", "openclaw-node"]);
+
 function isIgnoredLaunchdLabel(label: string): boolean {
-  return label === resolveGatewayLaunchAgentLabel();
+  return label === resolveGatewayLaunchAgentLabel() || KNOWN_NON_GATEWAY_LAUNCHD_LABELS.has(label);
 }
 
 function isIgnoredSystemdName(name: string): boolean {
-  return name === resolveGatewaySystemdServiceName();
+  return name === resolveGatewaySystemdServiceName() || KNOWN_NON_GATEWAY_SYSTEMD_NAMES.has(name);
 }
 
 function isLegacyLabel(label: string): boolean {
