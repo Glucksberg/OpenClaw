@@ -44,7 +44,29 @@ describe("spawnWithFallback", () => {
     expect(spawnMock.mock.calls[1]?.[2]?.stdio).toEqual(["ignore", "pipe", "pipe"]);
   });
 
-  it("does not retry on non-EBADF errors", async () => {
+  it("retries on EAGAIN using fallback options", async () => {
+    const spawnMock = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        const err = new Error("spawn EAGAIN");
+        (err as NodeJS.ErrnoException).code = "EAGAIN";
+        throw err;
+      })
+      .mockImplementationOnce(() => createStubChild());
+
+    const result = await spawnWithFallback({
+      argv: ["echo", "ok"],
+      options: { stdio: ["pipe", "pipe", "pipe"] },
+      fallbacks: [{ label: "safe-stdin", options: { stdio: ["ignore", "pipe", "pipe"] } }],
+      spawnImpl: spawnMock,
+    });
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackLabel).toBe("safe-stdin");
+    expect(spawnMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry on non-retryable errors", async () => {
     const spawnMock = vi.fn().mockImplementationOnce(() => {
       const err = new Error("spawn ENOENT");
       (err as NodeJS.ErrnoException).code = "ENOENT";
