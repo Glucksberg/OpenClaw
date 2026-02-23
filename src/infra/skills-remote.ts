@@ -21,6 +21,34 @@ const log = createSubsystemLogger("gateway/skills-remote");
 const remoteNodes = new Map<string, RemoteNodeRecord>();
 let remoteRegistry: NodeRegistry | null = null;
 
+/**
+ * Track consecutive probe failures per node for exponential backoff.
+ * Prevents CPU spikes when a node (e.g. macOS companion) is connected
+ * but unable to respond to bin probes.
+ */
+const probeFailures = new Map<string, { count: number; nextAllowedMs: number }>();
+const PROBE_BACKOFF_BASE_MS = 5_000;
+const PROBE_BACKOFF_MAX_MS = 5 * 60 * 1_000; // 5 minutes
+
+function shouldSkipProbe(nodeId: string): boolean {
+  const failure = probeFailures.get(nodeId);
+  if (!failure) {
+    return false;
+  }
+  return Date.now() < failure.nextAllowedMs;
+}
+
+function recordProbeFailure(nodeId: string): void {
+  const existing = probeFailures.get(nodeId);
+  const count = (existing?.count ?? 0) + 1;
+  const delayMs = Math.min(PROBE_BACKOFF_BASE_MS * 2 ** (count - 1), PROBE_BACKOFF_MAX_MS);
+  probeFailures.set(nodeId, { count, nextAllowedMs: Date.now() + delayMs });
+}
+
+function recordProbeSuccess(nodeId: string): void {
+  probeFailures.delete(nodeId);
+}
+
 function describeNode(nodeId: string): string {
   const record = remoteNodes.get(nodeId);
   const name = record?.displayName?.trim();
@@ -170,6 +198,7 @@ export function recordRemoteNodeBins(nodeId: string, bins: string[]) {
 
 export function removeRemoteNodeInfo(nodeId: string) {
   remoteNodes.delete(nodeId);
+  probeFailures.delete(nodeId);
 }
 
 function collectRequiredBins(entries: SkillEntry[], targetPlatform: string): string[] {
@@ -257,6 +286,9 @@ export async function refreshRemoteNodeBins(params: {
   if (!canWhich && !canRun) {
     return;
   }
+  if (shouldSkipProbe(params.nodeId)) {
+    return;
+  }
 
   const workspaceDirs = listAgentWorkspaceDirs(params.cfg);
   const requiredBins = new Set<string>();
@@ -290,9 +322,11 @@ export async function refreshRemoteNodeBins(params: {
           },
     );
     if (!res.ok) {
+      recordProbeFailure(params.nodeId);
       logRemoteBinProbeFailure(params.nodeId, res.error?.message ?? "unknown");
       return;
     }
+    recordProbeSuccess(params.nodeId);
     const bins = parseBinProbePayload(res.payloadJSON, res.payload);
     const existingBins = remoteNodes.get(params.nodeId)?.bins;
     const nextBins = new Set(bins);
@@ -304,6 +338,7 @@ export async function refreshRemoteNodeBins(params: {
     await updatePairedNodeMetadata(params.nodeId, { bins });
     bumpSkillsSnapshotVersion({ reason: "remote-node" });
   } catch (err) {
+    recordProbeFailure(params.nodeId);
     logRemoteBinProbeFailure(params.nodeId, err);
   }
 }
