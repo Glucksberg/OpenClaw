@@ -59,9 +59,10 @@ export function buildSystemdUnit({
     `ExecStart=${execStart}`,
     "Restart=always",
     "RestartSec=5",
-    // Keep service children in the same lifecycle so restarts do not leave
-    // orphan ACP/runtime workers behind.
-    "KillMode=control-group",
+    // Use KillMode=mixed so the main process gets SIGTERM for graceful shutdown
+    // while all remaining child processes (e.g. Chrome/Playwright) are cleaned up
+    // via SIGKILL after TimeoutStopSec, preventing orphan process accumulation.
+    "KillMode=mixed",
     workingDirLine,
     ...envLines,
     "",
