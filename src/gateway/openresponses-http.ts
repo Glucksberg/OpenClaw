@@ -238,6 +238,14 @@ function createAssistantOutputItem(params: {
   };
 }
 
+function normalizeFunctionCallId(id: unknown): string {
+  const raw = typeof id === "string" ? id.trim() : "";
+  if (raw) {
+    return raw.slice(0, 64);
+  }
+  return `call_${randomUUID()}`.slice(0, 64);
+}
+
 async function runResponsesAgentCommand(params: {
   message: string;
   images: ImageContent[];
@@ -494,7 +502,7 @@ export async function handleOpenResponsesHttpRequest(
             {
               type: "function_call",
               id: functionCallItemId,
-              call_id: functionCall.id.slice(0, 64),
+              call_id: normalizeFunctionCallId(functionCall.id),
               name: functionCall.name,
               arguments: functionCall.arguments,
             },
@@ -753,7 +761,7 @@ export async function handleOpenResponsesHttpRequest(
           const functionCallItem = {
             type: "function_call" as const,
             id: functionCallItemId,
-            call_id: functionCall.id.slice(0, 64),
+            call_id: normalizeFunctionCallId(functionCall.id),
             name: functionCall.name,
             arguments: functionCall.arguments,
           };

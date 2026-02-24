@@ -581,6 +581,62 @@ describe("OpenResponses HTTP API (e2e)", () => {
     }
   });
 
+  it("normalizes tool call call_id for long and missing ids", async () => {
+    const port = enabledPort;
+    const longId = `call_${"x".repeat(96)}`;
+
+    agentCommand.mockClear();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [],
+      meta: {
+        stopReason: "tool_calls",
+        pendingToolCalls: [{ id: longId, name: "get_weather", arguments: "{}" }],
+      },
+    } as never);
+
+    const resLongId = await postResponses(port, {
+      stream: false,
+      model: "openclaw",
+      input: "weather?",
+    });
+    expect(resLongId.status).toBe(200);
+    const longIdJson = (await resLongId.json()) as {
+      output?: Array<{ type?: string; call_id?: string }>;
+    };
+    const longIdFunctionCall = (longIdJson.output ?? []).find(
+      (item) => item.type === "function_call",
+    );
+    expect(longIdFunctionCall?.call_id).toBe(longId.slice(0, 64));
+
+    agentCommand.mockClear();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [],
+      meta: {
+        stopReason: "tool_calls",
+        pendingToolCalls: [
+          { id: undefined as unknown as string, name: "get_weather", arguments: "{}" },
+        ],
+      },
+    } as never);
+
+    const resMissingId = await postResponses(port, {
+      stream: true,
+      model: "openclaw",
+      input: "weather?",
+    });
+    expect(resMissingId.status).toBe(200);
+    const sseText = await resMissingId.text();
+    const functionCallAdded = parseSseEvents(sseText)
+      .filter((event) => event.event === "response.output_item.added")
+      .map((event) => JSON.parse(event.data) as { item?: { type?: string; call_id?: string } })
+      .map((parsed) => parsed.item)
+      .find((item) => item?.type === "function_call");
+
+    const fallbackCallId = functionCallAdded?.call_id ?? "";
+    expect(fallbackCallId.length).toBeGreaterThan(0);
+    expect(fallbackCallId.length).toBeLessThanOrEqual(64);
+  });
+
   it("blocks unsafe URL-based file/image inputs", async () => {
     const port = enabledPort;
     agentCommand.mockClear();
