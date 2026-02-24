@@ -63,6 +63,10 @@ export function buildSystemdUnit({
     // while all remaining child processes (e.g. Chrome/Playwright) are cleaned up
     // via SIGKILL after TimeoutStopSec, preventing orphan process accumulation.
     "KillMode=mixed",
+    // TimeoutStopSec bounds the worst-case shutdown time for container runtimes
+    // (podman/conmon). Without this, container processes may delay shutdown
+    // indefinitely waiting for container cleanup that may never complete.
+    "TimeoutStopSec=30",
     workingDirLine,
     ...envLines,
     "",
