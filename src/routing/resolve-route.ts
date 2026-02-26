@@ -1,4 +1,4 @@
-import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { isAgentAllowedForChatType, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { ChatType } from "../channels/chat-type.js";
 import { normalizeChatType } from "../channels/chat-type.js";
 import type { OpenClawConfig } from "../config/config.js";
@@ -307,10 +307,9 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
   const dmScope = input.cfg.session?.dmScope ?? "main";
   const identityLinks = input.cfg.session?.identityLinks;
 
-  const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
-    const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
+  const buildRoute = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
     const sessionKey = buildAgentSessionKey({
-      agentId: resolvedAgentId,
+      agentId,
       channel,
       accountId,
       peer,
@@ -318,17 +317,29 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
       identityLinks,
     }).toLowerCase();
     const mainSessionKey = buildAgentMainSessionKey({
-      agentId: resolvedAgentId,
+      agentId,
       mainKey: DEFAULT_MAIN_KEY,
     }).toLowerCase();
-    return {
-      agentId: resolvedAgentId,
-      channel,
-      accountId,
-      sessionKey,
-      mainSessionKey,
-      matchedBy,
-    };
+    return { agentId, channel, accountId, sessionKey, mainSessionKey, matchedBy };
+  };
+
+  const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
+    const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
+    // Enforce per-agent chat type restrictions. If the resolved agent has
+    // groupChat.allowedChatTypes set and the current peer kind is not in that list,
+    // block this agent from responding and fall back to the default agent.
+    // This prevents full-access agents from being invoked in group chats when
+    // only restricted agents are intended for that context (#25963).
+    if (peer && !isAgentAllowedForChatType(input.cfg, resolvedAgentId, peer.kind)) {
+      const defaultAgentId = pickFirstExistingAgentId(input.cfg, resolveDefaultAgentId(input.cfg));
+      if (shouldLogVerbose()) {
+        logDebug(
+          `[routing] agent ${resolvedAgentId} not allowed for chat type ${peer.kind}; falling back to default agent ${defaultAgentId}`,
+        );
+      }
+      return buildRoute(defaultAgentId, "default");
+    }
+    return buildRoute(resolvedAgentId, matchedBy);
   };
 
   const shouldLogDebug = shouldLogVerbose();

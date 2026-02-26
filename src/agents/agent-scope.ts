@@ -279,3 +279,36 @@ export function resolveAgentDir(cfg: OpenClawConfig, agentId: string) {
   const root = resolveStateDir(process.env);
   return path.join(root, "agents", id, "agent");
 }
+
+/**
+ * Returns the allowedChatTypes restriction for an agent, or undefined if unrestricted.
+ * Only returns a non-empty array when the agent has an explicit allowedChatTypes list;
+ * an empty array (misconfiguration) is treated as unrestricted.
+ */
+export function resolveAgentAllowedChatTypes(
+  cfg: OpenClawConfig,
+  agentId: string,
+): string[] | undefined {
+  const raw = resolveAgentConfig(cfg, agentId)?.groupChat;
+  if (!raw || !Array.isArray(raw.allowedChatTypes) || raw.allowedChatTypes.length === 0) {
+    return undefined;
+  }
+  return raw.allowedChatTypes.map((t) => String(t).trim().toLowerCase()).filter(Boolean);
+}
+
+/**
+ * Returns true when the given agent is allowed to respond in the given chat type.
+ * If the agent has no allowedChatTypes restriction, it is allowed in all chat types.
+ */
+export function isAgentAllowedForChatType(
+  cfg: OpenClawConfig,
+  agentId: string,
+  chatType: string,
+): boolean {
+  const allowedTypes = resolveAgentAllowedChatTypes(cfg, agentId);
+  if (!allowedTypes) {
+    return true;
+  }
+  const normalized = chatType.trim().toLowerCase();
+  return allowedTypes.includes(normalized);
+}
