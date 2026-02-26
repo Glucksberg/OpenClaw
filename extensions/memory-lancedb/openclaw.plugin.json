@@ -72,10 +72,12 @@
         "type": "string"
       },
       "autoCapture": {
-        "type": "boolean"
+        "type": "boolean",
+        "default": false
       },
       "autoRecall": {
-        "type": "boolean"
+        "type": "boolean",
+        "default": true
       },
       "captureMaxChars": {
         "type": "number",
