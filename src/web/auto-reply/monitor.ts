@@ -228,6 +228,9 @@ export async function monitorWebChannel(
       channel: "whatsapp",
       accountId: account.accountId,
     });
+    if (!connectRoute) {
+      return; // agent blocked for this chat type
+    }
     enqueueSystemEvent(`WhatsApp gateway connected${selfE164 ? ` as ${selfE164}` : ""}.`, {
       sessionKey: connectRoute.sessionKey,
     });

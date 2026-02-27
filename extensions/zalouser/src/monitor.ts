@@ -314,6 +314,9 @@ async function processMessage(
       id: peer.id,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   const fromLabel = isGroup ? `group:${chatId}` : senderName || `user:${senderId}`;
   const storePath = core.channel.session.resolveStorePath(config.session?.store, {

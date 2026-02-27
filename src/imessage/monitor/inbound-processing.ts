@@ -69,7 +69,7 @@ export type IMessageInboundDispatchDecision = {
   historyKey?: string;
   sender: string;
   senderNormalized: string;
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
   bodyText: string;
   createdAt?: number;
   replyContext: IMessageReplyContext | null;
@@ -207,6 +207,9 @@ export function resolveIMessageInboundDecision(params: {
       id: isGroup ? String(chatId ?? "unknown") : senderNormalized,
     },
   });
+  if (!route) {
+    return { kind: "drop", reason: "agent blocked for this chat type" }; // #25963
+  }
   const mentionRegexes = buildMentionRegexes(params.cfg, route.agentId);
   const messageText = params.messageText.trim();
   const bodyText = params.bodyText.trim();

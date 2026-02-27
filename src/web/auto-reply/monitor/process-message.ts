@@ -116,7 +116,7 @@ async function resolveWhatsAppCommandAuthorized(params: {
 export async function processMessage(params: {
   cfg: ReturnType<typeof loadConfig>;
   msg: WebInboundMsg;
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
   groupHistoryKey: string;
   groupHistories: Map<string, GroupHistoryEntry[]>;
   groupMemberNames: Map<string, Map<string, string>>;

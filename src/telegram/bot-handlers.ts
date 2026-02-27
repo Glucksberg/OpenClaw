@@ -257,11 +257,13 @@ export const registerTelegramHandlers = ({
     isForum: boolean;
     messageThreadId?: number;
     resolvedThreadId?: number;
-  }): {
-    agentId: string;
-    sessionEntry: ReturnType<typeof loadSessionStore>[string];
-    model?: string;
-  } => {
+  }):
+    | {
+        agentId: string;
+        sessionEntry: ReturnType<typeof loadSessionStore>[string];
+        model?: string;
+      }
+    | undefined => {
     const resolvedThreadId =
       params.resolvedThreadId ??
       resolveTelegramForumThreadId({
@@ -286,6 +288,9 @@ export const registerTelegramHandlers = ({
       },
       parentPeer,
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
     const baseSessionKey = route.sessionKey;
     const dmThreadId = !params.isGroup ? params.messageThreadId : undefined;
     const threadKeys =
@@ -790,6 +795,9 @@ export const registerTelegramHandlers = ({
         peer: { kind: isGroup ? "group" : "direct", id: peerId },
         parentPeer,
       });
+      if (!route) {
+        return; // agent blocked for this chat type
+      }
       const sessionKey = route.sessionKey;
 
       // Enqueue system event for each added reaction.
@@ -1195,6 +1203,9 @@ export const registerTelegramHandlers = ({
             messageThreadId,
             resolvedThreadId,
           });
+          if (!sessionState) {
+            return; // agent blocked for this chat type
+          }
           const currentModel = sessionState.model;
 
           const buttons = buildModelsKeyboard({

@@ -519,6 +519,9 @@ export async function registerSlackMonitorSlashCommands(params: {
           id: isDirectMessage ? command.user_id : command.channel_id,
         },
       });
+      if (!route) {
+        return; // agent blocked for this chat type
+      }
 
       const { untrustedChannelMetadata, groupSystemPrompt } = resolveSlackRoomContextHints({
         isRoomish,

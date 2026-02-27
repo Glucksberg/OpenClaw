@@ -66,14 +66,16 @@ function resolveLineInboundRoute(params: {
   source: EventSource;
   cfg: OpenClawConfig;
   account: ResolvedLineAccount;
-}): {
-  userId?: string;
-  groupId?: string;
-  roomId?: string;
-  isGroup: boolean;
-  peerId: string;
-  route: ReturnType<typeof resolveAgentRoute>;
-} {
+}):
+  | {
+      userId?: string;
+      groupId?: string;
+      roomId?: string;
+      isGroup: boolean;
+      peerId: string;
+      route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
+    }
+  | undefined {
   recordChannelActivity({
     channel: "line",
     accountId: params.account.accountId,
@@ -91,6 +93,9 @@ function resolveLineInboundRoute(params: {
       id: peerId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   return { userId, groupId, roomId, isGroup, peerId, route };
 }
@@ -171,7 +176,7 @@ function extractMediaPlaceholder(message: MessageEvent["message"]): string {
   }
 }
 
-type LineRouteInfo = ReturnType<typeof resolveAgentRoute>;
+type LineRouteInfo = NonNullable<ReturnType<typeof resolveAgentRoute>>;
 type LineSourceInfoWithPeerId = LineSourceInfo & { peerId: string };
 
 function resolveLineConversationLabel(params: {
@@ -335,11 +340,15 @@ export async function buildLineMessageContext(params: BuildLineMessageContextPar
   const { event, allMedia, cfg, account } = params;
 
   const source = event.source;
-  const { userId, groupId, roomId, isGroup, peerId, route } = resolveLineInboundRoute({
+  const resolved = resolveLineInboundRoute({
     source,
     cfg,
     account,
   });
+  if (!resolved) {
+    return null; // agent blocked for this chat type
+  }
+  const { userId, groupId, roomId, isGroup, peerId, route } = resolved;
 
   const message = event.message;
   const messageId = message.id;
@@ -412,11 +421,15 @@ export async function buildLinePostbackContext(params: {
   const { event, cfg, account } = params;
 
   const source = event.source;
-  const { userId, groupId, roomId, isGroup, peerId, route } = resolveLineInboundRoute({
+  const resolved = resolveLineInboundRoute({
     source,
     cfg,
     account,
   });
+  if (!resolved) {
+    return null; // agent blocked for this chat type
+  }
+  const { userId, groupId, roomId, isGroup, peerId, route } = resolved;
 
   const timestamp = event.timestamp;
   const rawData = event.postback?.data?.trim() ?? "";

@@ -421,6 +421,9 @@ async function handleDiscordReactionEvent(params: {
         },
         parentPeer: parentPeerId ? { kind: "channel", id: parentPeerId } : undefined,
       });
+      if (!route) {
+        return; // agent blocked for this chat type
+      }
       enqueueSystemEvent(text, {
         sessionKey: route.sessionKey,
         contextKey,

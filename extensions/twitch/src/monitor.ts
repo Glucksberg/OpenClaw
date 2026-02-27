@@ -57,6 +57,9 @@ async function processTwitchMessage(params: {
       id: message.channel,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   const rawBody = message.message;
   const body = core.channel.reply.formatAgentEnvelope({

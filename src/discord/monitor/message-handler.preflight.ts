@@ -303,6 +303,9 @@ export async function preflightDiscordMessage(
     // Pass parent peer for thread binding inheritance
     parentPeer: earlyThreadParentId ? { kind: "channel", id: earlyThreadParentId } : undefined,
   });
+  if (!route) {
+    return null; // agent blocked for this chat type
+  }
   let threadBinding: SessionBindingRecord | undefined;
   if (earlyThreadChannel) {
     threadBinding =

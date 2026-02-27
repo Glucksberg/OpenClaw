@@ -805,6 +805,9 @@ async function dispatchDiscordComponentEvent(params: {
     },
     parentPeer: channelCtx.parentId ? { kind: "channel", id: channelCtx.parentId } : undefined,
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
   const sessionKey = params.routeOverrides?.sessionKey ?? route.sessionKey;
   const agentId = params.routeOverrides?.agentId ?? route.agentId;
   const accountId = params.routeOverrides?.accountId ?? route.accountId;
@@ -1329,6 +1332,9 @@ export class AgentComponentButton extends Button {
       channelId,
       parentId,
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
 
     const eventText = `[Discord component: ${componentId} clicked by ${username} (${userId})]`;
 
@@ -1421,6 +1427,9 @@ export class AgentSelectMenu extends StringSelectMenu {
       channelId,
       parentId,
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
 
     const eventText = `[Discord select menu: ${componentId} interacted by ${username} (${userId})${valuesText}]`;
 

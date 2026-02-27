@@ -201,11 +201,12 @@ describe("applyGroupGating", () => {
       channel: "whatsapp",
       peer: { kind: "group", id: "123@g.us" },
     });
-    expect(route.agentId).toBe("work");
+    expect(route).not.toBeNull();
+    expect(route!.agentId).toBe("work");
 
     const { result: globalMention } = runGroupGating({
       cfg,
-      agentId: route.agentId,
+      agentId: route!.agentId,
       msg: createGroupMessage({
         id: "g1",
         body: "@global ping",
@@ -217,7 +218,7 @@ describe("applyGroupGating", () => {
 
     const { result: workMention } = runGroupGating({
       cfg,
-      agentId: route.agentId,
+      agentId: route!.agentId,
       msg: createGroupMessage({
         id: "g2",
         body: "@workbot ping",

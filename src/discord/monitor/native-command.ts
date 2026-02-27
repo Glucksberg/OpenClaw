@@ -401,6 +401,9 @@ async function resolveDiscordModelPickerRoute(params: {
     },
     parentPeer: threadParentId ? { kind: "channel", id: threadParentId } : undefined,
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   const threadBinding = isThreadChannel
     ? params.threadBindings.getByThreadId(rawChannelId)
@@ -418,7 +421,7 @@ async function resolveDiscordModelPickerRoute(params: {
 
 function resolveDiscordModelPickerCurrentModel(params: {
   cfg: ReturnType<typeof loadConfig>;
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
   data: Awaited<ReturnType<typeof loadDiscordModelPickerData>>;
 }): string {
   const fallback = buildDiscordModelPickerCurrentModel(
@@ -465,6 +468,9 @@ async function replyWithDiscordModelPickerProviders(params: {
     accountId: params.accountId,
     threadBindings: params.threadBindings,
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
   const currentModel = resolveDiscordModelPickerCurrentModel({
     cfg: params.cfg,
     route,
@@ -626,6 +632,9 @@ async function handleDiscordModelPickerInteraction(
     accountId: ctx.accountId,
     threadBindings: ctx.threadBindings,
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
   const currentModelRef = resolveDiscordModelPickerCurrentModel({
     cfg: ctx.cfg,
     route,
@@ -1506,6 +1515,9 @@ async function dispatchDiscordCommandInteraction(params: {
     },
     parentPeer: threadParentId ? { kind: "channel", id: threadParentId } : undefined,
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
   const threadBinding = isThreadChannel ? threadBindings.getByThreadId(rawChannelId) : undefined;
   const boundSessionKey = threadBinding?.targetSessionKey?.trim();
   const boundAgentId = boundSessionKey ? resolveAgentIdFromSessionKey(boundSessionKey) : undefined;

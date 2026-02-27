@@ -263,7 +263,16 @@ export const GroupChatSchema = z
   .object({
     mentionPatterns: z.array(z.string()).optional(),
     historyLimit: z.number().int().positive().optional(),
-    allowedChatTypes: z.array(z.string()).optional(),
+  })
+  .strict()
+  .optional();
+
+/** Extended group-chat schema for per-agent config; adds allowedChatTypes restriction. */
+export const AgentGroupChatSchema = z
+  .object({
+    mentionPatterns: z.array(z.string()).optional(),
+    historyLimit: z.number().int().positive().optional(),
+    allowedChatTypes: z.array(z.enum(["direct", "group", "channel"])).optional(),
   })
   .strict()
   .optional();

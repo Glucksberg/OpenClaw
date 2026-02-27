@@ -54,12 +54,6 @@ export type ResolvedAgentRoute = {
     | "binding.account"
     | "binding.channel"
     | "default";
-  /**
-   * When true, the resolved agent (and the default fallback) are both restricted
-   * from the current chat type via `groupChat.allowedChatTypes`. Callers should
-   * skip message processing for this route.
-   */
-  blocked?: boolean;
 };
 
 export { DEFAULT_ACCOUNT_ID, DEFAULT_AGENT_ID } from "./session-key.js";
@@ -294,7 +288,7 @@ function matchesBindingScope(match: NormalizedBindingMatch, scope: BindingScope)
   return true;
 }
 
-export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentRoute {
+export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentRoute | null {
   const channel = normalizeToken(input.channel);
   const accountId = normalizeAccountId(input.accountId);
   const peer = input.peer
@@ -329,31 +323,20 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     return { agentId, channel, accountId, sessionKey, mainSessionKey, matchedBy };
   };
 
-  const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
+  // Returns null when the resolved agent is disallowed for the current chat type,
+  // signaling the tier loop to continue scanning lower-priority matches (#25963).
+  const tryChoose = (
+    agentId: string,
+    matchedBy: ResolvedAgentRoute["matchedBy"],
+  ): ResolvedAgentRoute | null => {
     const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
-    // Enforce per-agent chat type restrictions. If the resolved agent has
-    // groupChat.allowedChatTypes set and the current peer kind is not in that list,
-    // block this agent from responding and fall back to the default agent.
-    // This prevents full-access agents from being invoked in group chats when
-    // only restricted agents are intended for that context (#25963).
     if (peer && !isAgentAllowedForChatType(input.cfg, resolvedAgentId, peer.kind)) {
-      const defaultAgentId = pickFirstExistingAgentId(input.cfg, resolveDefaultAgentId(input.cfg));
-      // Also enforce allowedChatTypes on the default fallback agent so it cannot
-      // bypass the same restriction that blocked the binding-matched agent.
-      if (!isAgentAllowedForChatType(input.cfg, defaultAgentId, peer.kind)) {
-        if (shouldLogVerbose()) {
-          logDebug(
-            `[routing] agent ${resolvedAgentId} and default agent ${defaultAgentId} both not allowed for chat type ${peer.kind}; returning blocked route`,
-          );
-        }
-        return { ...buildRoute(defaultAgentId, "default"), blocked: true as const };
-      }
       if (shouldLogVerbose()) {
         logDebug(
-          `[routing] agent ${resolvedAgentId} not allowed for chat type ${peer.kind}; falling back to default agent ${defaultAgentId}`,
+          `[routing] agent ${resolvedAgentId} not allowed for chat type ${peer.kind}; skipping`,
         );
       }
-      return buildRoute(defaultAgentId, "default");
+      return null;
     }
     return buildRoute(resolvedAgentId, matchedBy);
   };
@@ -450,21 +433,34 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     if (!tier.enabled) {
       continue;
     }
-    const matched = bindings.find(
-      (candidate) =>
-        tier.predicate(candidate) &&
-        matchesBindingScope(candidate.match, {
+    // Scan all matching bindings within this tier; if the first match is blocked
+    // by allowedChatTypes, try subsequent matches before moving to lower tiers.
+    for (const candidate of bindings) {
+      if (
+        !tier.predicate(candidate) ||
+        !matchesBindingScope(candidate.match, {
           ...baseScope,
           peer: tier.scopePeer,
-        }),
-    );
-    if (matched) {
-      if (shouldLogDebug) {
-        logDebug(`[routing] match: matchedBy=${tier.matchedBy} agentId=${matched.binding.agentId}`);
+        })
+      ) {
+        continue;
       }
-      return choose(matched.binding.agentId, tier.matchedBy);
+      if (shouldLogDebug) {
+        logDebug(
+          `[routing] match: matchedBy=${tier.matchedBy} agentId=${candidate.binding.agentId}`,
+        );
+      }
+      const route = tryChoose(candidate.binding.agentId, tier.matchedBy);
+      // If the matched agent is disallowed for this chat type, continue scanning
+      // other bindings in this tier and then lower-priority tiers.
+      if (route) {
+        return route;
+      }
     }
   }
 
-  return choose(resolveDefaultAgentId(input.cfg), "default");
+  // All tiers exhausted or all matched agents were disallowed; try default.
+  // If the default agent is also disallowed for this chat type, return null
+  // so callers can silently drop the message (#25963).
+  return tryChoose(resolveDefaultAgentId(input.cfg), "default");
 }

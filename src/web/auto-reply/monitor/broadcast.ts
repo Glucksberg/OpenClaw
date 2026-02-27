@@ -15,12 +15,12 @@ export async function maybeBroadcastMessage(params: {
   cfg: ReturnType<typeof loadConfig>;
   msg: WebInboundMsg;
   peerId: string;
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
   groupHistoryKey: string;
   groupHistories: Map<string, GroupHistoryEntry[]>;
   processMessage: (
     msg: WebInboundMsg,
-    route: ReturnType<typeof resolveAgentRoute>,
+    route: NonNullable<ReturnType<typeof resolveAgentRoute>>,
     groupHistoryKey: string,
     opts?: {
       groupHistory?: GroupHistoryEntry[];

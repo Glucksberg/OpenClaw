@@ -188,6 +188,9 @@ export const buildTelegramMessageContext = async ({
     },
     parentPeer,
   });
+  if (!route) {
+    return null; // agent blocked for this chat type
+  }
   const baseSessionKey = route.sessionKey;
   // DMs: use raw messageThreadId for thread sessions (not forum topic ids)
   const dmThreadId = threadSpec.scope === "dm" ? threadSpec.id : undefined;

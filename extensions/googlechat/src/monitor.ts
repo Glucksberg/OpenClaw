@@ -646,6 +646,9 @@ async function processMessageWithPipeline(params: {
       id: spaceId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   let mediaPath: string | undefined;
   let mediaType: string | undefined;

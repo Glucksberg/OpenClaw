@@ -32,7 +32,7 @@ export function createWebOnMessageHandler(params: {
 }) {
   const processForRoute = async (
     msg: WebInboundMsg,
-    route: ReturnType<typeof resolveAgentRoute>,
+    route: NonNullable<ReturnType<typeof resolveAgentRoute>>,
     groupHistoryKey: string,
     opts?: {
       groupHistory?: GroupHistoryEntry[];
@@ -73,6 +73,9 @@ export function createWebOnMessageHandler(params: {
         id: peerId,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
     const groupHistoryKey =
       msg.chatType === "group"
         ? buildGroupHistoryKey({

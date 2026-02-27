@@ -4,16 +4,21 @@ import type { TtsConfig } from "./types.tts.js";
 export type GroupChatConfig = {
   mentionPatterns?: string[];
   historyLimit?: number;
-  /**
-   * Restrict this agent to specific chat types.
-   * If set, the agent will only respond in the listed chat types.
-   * Valid values: "direct", "group", "channel".
-   * When omitted, the agent responds in all chat types.
-   *
-   * Example: ["direct"] — agent only responds in DMs, not in group chats.
-   * Example: ["group", "channel"] — agent only responds in group/channel contexts.
-   */
-  allowedChatTypes?: string[];
+};
+
+/**
+ * Extended group-chat config for per-agent settings; adds allowedChatTypes restriction.
+ *
+ * Restrict this agent to specific chat types.
+ * If set, the agent will only respond in the listed chat types.
+ * Valid values: "direct", "group", "channel".
+ * When omitted, the agent responds in all chat types.
+ *
+ * Example: ["direct"] — agent only responds in DMs, not in group chats.
+ * Example: ["group", "channel"] — agent only responds in group/channel contexts.
+ */
+export type AgentGroupChatConfig = GroupChatConfig & {
+  allowedChatTypes?: Array<"direct" | "group" | "channel">;
 };
 
 export type DmConfig = {

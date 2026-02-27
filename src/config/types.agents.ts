@@ -2,7 +2,7 @@ import type { ChatType } from "../channels/chat-type.js";
 import type { AgentDefaultsConfig } from "./types.agent-defaults.js";
 import type { AgentModelConfig, AgentSandboxConfig } from "./types.agents-shared.js";
 import type { HumanDelayConfig, IdentityConfig } from "./types.base.js";
-import type { GroupChatConfig } from "./types.messages.js";
+import type { AgentGroupChatConfig } from "./types.messages.js";
 import type { AgentToolsConfig, MemorySearchConfig } from "./types.tools.js";
 
 export type AgentConfig = {
@@ -20,7 +20,7 @@ export type AgentConfig = {
   /** Optional per-agent heartbeat overrides. */
   heartbeat?: AgentDefaultsConfig["heartbeat"];
   identity?: IdentityConfig;
-  groupChat?: GroupChatConfig;
+  groupChat?: AgentGroupChatConfig;
   subagents?: {
     /** Allow spawning sub-agents under other agent ids. Use "*" to allow any. */
     allowAgents?: string[];

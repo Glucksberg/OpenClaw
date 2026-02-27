@@ -355,6 +355,9 @@ export async function monitorTlonProvider(opts: MonitorTlonOpts = {}): Promise<v
         id: isGroup ? (groupChannel ?? senderShip) : senderShip,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
 
     const fromLabel = isGroup ? `${senderShip} in ${groupName}` : senderShip;
     const body = core.channel.reply.formatAgentEnvelope({

@@ -655,6 +655,9 @@ export async function processMessage(
       id: peerId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   // Mention gating for group chats (parity with iMessage/WhatsApp)
   const messageText = text;
@@ -1440,6 +1443,9 @@ export async function processReaction(
       id: peerId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   const senderLabel = reaction.senderName || reaction.senderId;
   const chatLabel = reaction.isGroup ? ` in group:${peerId}` : "";

@@ -109,7 +109,7 @@ function getDirectSignalEventsFor(sender: string) {
     accountId: "default",
     peer: { kind: "direct", id: normalizeE164(sender) },
   });
-  return peekSystemEvents(route.sessionKey);
+  return peekSystemEvents(route!.sessionKey);
 }
 
 function makeBaseEnvelope(overrides: Record<string, unknown> = {}) {

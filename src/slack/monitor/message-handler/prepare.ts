@@ -173,6 +173,9 @@ export async function prepareSlackMessage(params: {
       id: isDirectMessage ? (message.user ?? "unknown") : message.channel,
     },
   });
+  if (!route) {
+    return null; // agent blocked for this chat type
+  }
 
   const baseSessionKey = route.sessionKey;
   const threadContext = resolveSlackThreadContext({ message, replyToMode: ctx.replyToMode });

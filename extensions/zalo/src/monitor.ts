@@ -432,6 +432,9 @@ async function processMessageWithPipeline(params: {
       id: chatId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   if (
     isGroup &&

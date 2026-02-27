@@ -242,6 +242,9 @@ export async function handleNextcloudTalkInbound(params: {
       id: isGroup ? roomToken : senderId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   const fromLabel = isGroup ? `room:${roomName || roomToken}` : senderName || `user:${senderId}`;
   const storePath = core.channel.session.resolveStorePath(

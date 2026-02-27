@@ -408,6 +408,9 @@ export const registerTelegramNativeCommands = ({
       },
       parentPeer,
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
     const mediaLocalRoots = getAgentScopedMediaLocalRoots(cfg, route.agentId);
     const tableMode = resolveMarkdownTableMode({
       cfg,
@@ -478,13 +481,16 @@ export const registerTelegramNativeCommands = ({
             topicConfig,
             commandAuthorized,
           } = auth;
-          const { threadSpec, route, mediaLocalRoots, tableMode, chunkMode } =
-            resolveCommandRuntimeContext({
-              msg,
-              isGroup,
-              isForum,
-              resolvedThreadId,
-            });
+          const runtimeCtx = resolveCommandRuntimeContext({
+            msg,
+            isGroup,
+            isForum,
+            resolvedThreadId,
+          });
+          if (!runtimeCtx) {
+            return; // agent blocked for this chat type
+          }
+          const { threadSpec, route, mediaLocalRoots, tableMode, chunkMode } = runtimeCtx;
           const deliveryBaseOptions = buildCommandDeliveryBaseOptions({
             chatId,
             mediaLocalRoots,
@@ -702,13 +708,16 @@ export const registerTelegramNativeCommands = ({
             return;
           }
           const { senderId, commandAuthorized, isGroup, isForum, resolvedThreadId } = auth;
-          const { threadSpec, mediaLocalRoots, tableMode, chunkMode } =
-            resolveCommandRuntimeContext({
-              msg,
-              isGroup,
-              isForum,
-              resolvedThreadId,
-            });
+          const runtimeCtx = resolveCommandRuntimeContext({
+            msg,
+            isGroup,
+            isForum,
+            resolvedThreadId,
+          });
+          if (!runtimeCtx) {
+            return; // agent blocked for this chat type
+          }
+          const { threadSpec, mediaLocalRoots, tableMode, chunkMode } = runtimeCtx;
           const deliveryBaseOptions = buildCommandDeliveryBaseOptions({
             chatId,
             mediaLocalRoots,

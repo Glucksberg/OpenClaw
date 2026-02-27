@@ -433,6 +433,9 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
           id: isDirectMessage ? senderId : roomId,
         },
       });
+      if (!baseRoute) {
+        return; // agent blocked for this chat type
+      }
 
       const route = {
         ...baseRoute,

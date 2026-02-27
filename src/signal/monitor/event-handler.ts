@@ -90,6 +90,9 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
         id: entry.isGroup ? (entry.groupId ?? "unknown") : entry.senderPeerId,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
     const storePath = resolveStorePath(deps.cfg.session?.store, {
       agentId: route.agentId,
     });
@@ -372,6 +375,9 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
         id: isGroup ? (groupId ?? "unknown") : senderPeerId,
       },
     });
+    if (!route) {
+      return true; // agent blocked for this chat type
+    }
     const groupLabel = isGroup ? `${groupName ?? "Signal Group"} id:${groupId}` : undefined;
     const messageId = params.reaction.targetSentTimestamp
       ? String(params.reaction.targetSentTimestamp)
@@ -558,6 +564,9 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
         id: isGroup ? (groupId ?? "unknown") : senderPeerId,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
     const mentionRegexes = buildMentionRegexes(deps.cfg, route.agentId);
     const wasMentioned = isGroup && matchesMentionPatterns(messageText, mentionRegexes);
     const requireMention =

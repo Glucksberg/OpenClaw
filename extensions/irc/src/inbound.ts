@@ -287,6 +287,9 @@ export async function handleIrcInbound(params: {
       id: peerId,
     },
   });
+  if (!route) {
+    return; // agent blocked for this chat type
+  }
 
   const fromLabel = message.isGroup ? message.target : senderDisplay;
   const storePath = core.channel.session.resolveStorePath(config.session?.store, {

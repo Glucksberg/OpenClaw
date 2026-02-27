@@ -378,6 +378,9 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
         id: isDirectMessage ? senderId : conversationId,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
 
     const preview = rawBody.replace(/\s+/g, " ").slice(0, 160);
     const inboundLabel = isDirectMessage

@@ -66,7 +66,7 @@ type VoiceSessionEntry = {
   guildId: string;
   channelId: string;
   sessionChannelId: string;
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
   connection: VoiceConnection;
   player: AudioPlayer;
   playbackQueue: Promise<void>;
@@ -423,6 +423,9 @@ export class DiscordVoiceManager {
       guildId,
       peer: { kind: "channel", id: sessionChannelId },
     });
+    if (!route) {
+      return { ok: false, message: "Agent blocked for this chat type", guildId, channelId };
+    }
 
     const player = createAudioPlayer();
     connection.subscribe(player);

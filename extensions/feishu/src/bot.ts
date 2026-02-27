@@ -787,6 +787,9 @@ export async function handleFeishuMessage(params: {
             }
           : null,
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
 
     // Dynamic agent creation for DM users
     // When enabled, creates a unique agent instance with its own workspace for each DM user.
@@ -811,6 +814,9 @@ export async function handleFeishuMessage(params: {
             accountId: account.accountId,
             peer: { kind: "direct", id: ctx.senderOpenId },
           });
+          if (!route) {
+            return; // agent blocked for this chat type
+          }
           log(
             `feishu[${account.accountId}]: dynamic agent created, new route: ${route.sessionKey}`,
           );

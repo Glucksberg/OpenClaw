@@ -528,7 +528,7 @@ describe("slack prepareSlackMessage inbound contract", () => {
       peer: { kind: "channel", id: "C123" },
     });
     const threadKeys = resolveThreadSessionKeys({
-      baseSessionKey: route.sessionKey,
+      baseSessionKey: route!.sessionKey,
       threadId: "200.000",
     });
     fs.writeFileSync(

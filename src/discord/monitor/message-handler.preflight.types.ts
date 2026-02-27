@@ -52,7 +52,7 @@ export type DiscordMessagePreflightContext = {
   messageText: string;
   wasMentioned: boolean;
 
-  route: ReturnType<typeof resolveAgentRoute>;
+  route: NonNullable<ReturnType<typeof resolveAgentRoute>>;
   threadBinding?: SessionBindingRecord;
   boundSessionKey?: string;
   boundAgentId?: string;

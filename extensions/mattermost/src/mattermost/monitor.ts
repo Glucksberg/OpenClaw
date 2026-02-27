@@ -501,6 +501,9 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         id: kind === "direct" ? senderId : channelId,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
 
     const baseSessionKey = route.sessionKey;
     const threadRootId = post.root_id?.trim() || undefined;
@@ -912,6 +915,9 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         id: kind === "direct" ? userId : channelId,
       },
     });
+    if (!route) {
+      return; // agent blocked for this chat type
+    }
     const sessionKey = route.sessionKey;
 
     const eventText = `Mattermost reaction ${action}: :${emojiName}: by @${senderName} on post ${postId} in channel ${channelId}`;
