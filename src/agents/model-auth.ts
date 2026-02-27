@@ -30,20 +30,25 @@ function resolveProviderConfig(
   provider: string,
 ): ModelProviderConfig | undefined {
   const providers = cfg?.models?.providers ?? {};
+
+  // Skip explicitly disabled providers (enabled: false).
+  const check = (entry: ModelProviderConfig | undefined): ModelProviderConfig | undefined =>
+    entry?.enabled === false ? undefined : entry;
+
   const direct = providers[provider] as ModelProviderConfig | undefined;
   if (direct) {
-    return direct;
+    return check(direct);
   }
   const normalized = normalizeProviderId(provider);
   if (normalized === provider) {
     const matched = Object.entries(providers).find(
       ([key]) => normalizeProviderId(key) === normalized,
     );
-    return matched?.[1];
+    return check(matched?.[1]);
   }
-  return (
+  return check(
     (providers[normalized] as ModelProviderConfig | undefined) ??
-    Object.entries(providers).find(([key]) => normalizeProviderId(key) === normalized)?.[1]
+      Object.entries(providers).find(([key]) => normalizeProviderId(key) === normalized)?.[1],
   );
 }
 

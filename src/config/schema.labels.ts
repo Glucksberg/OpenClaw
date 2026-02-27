@@ -380,6 +380,7 @@ export const FIELD_LABELS: Record<string, string> = {
   models: "Models",
   "models.mode": "Model Catalog Mode",
   "models.providers": "Model Providers",
+  "models.providers.*.enabled": "Model Provider Enabled",
   "models.providers.*.baseUrl": "Model Provider Base URL",
   "models.providers.*.apiKey": "Model Provider API Key",
   "models.providers.*.auth": "Model Provider Auth Mode",

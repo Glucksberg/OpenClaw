@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AuthProfileStore } from "./auth-profiles.js";
-import { requireApiKey, resolveAwsSdkEnvVarName, resolveModelAuthMode } from "./model-auth.js";
+import {
+  getCustomProviderApiKey,
+  requireApiKey,
+  resolveAwsSdkEnvVarName,
+  resolveModelAuthMode,
+} from "./model-auth.js";
 
 describe("resolveAwsSdkEnvVarName", () => {
   it("prefers bearer token over access keys and profile", () => {
@@ -115,5 +120,44 @@ describe("requireApiKey", () => {
         "openai",
       ),
     ).toThrow('No API key resolved for provider "openai"');
+  });
+});
+
+describe("getCustomProviderApiKey", () => {
+  it("returns api key for enabled provider", () => {
+    const key = getCustomProviderApiKey(
+      {
+        models: {
+          providers: {
+            "test-provider": {
+              baseUrl: "http://localhost:4000/v1",
+              apiKey: "sk-test-key",
+              models: [],
+            },
+          },
+        },
+      },
+      "test-provider",
+    );
+    expect(key).toBe("sk-test-key");
+  });
+
+  it("returns undefined for disabled provider", () => {
+    const key = getCustomProviderApiKey(
+      {
+        models: {
+          providers: {
+            "test-provider": {
+              enabled: false,
+              baseUrl: "http://localhost:4000/v1",
+              apiKey: "sk-test-key",
+              models: [],
+            },
+          },
+        },
+      },
+      "test-provider",
+    );
+    expect(key).toBeUndefined();
   });
 });

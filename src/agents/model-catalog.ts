@@ -87,6 +87,10 @@ function readConfiguredOptInProviderModels(config: OpenClawConfig): ModelCatalog
     if (!providerValue || typeof providerValue !== "object") {
       continue;
     }
+    // Skip explicitly disabled providers.
+    if ((providerValue as { enabled?: unknown }).enabled === false) {
+      continue;
+    }
 
     const configuredModels = (providerValue as { models?: unknown }).models;
     if (!Array.isArray(configuredModels)) {

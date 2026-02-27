@@ -641,6 +641,8 @@ export const FIELD_HELP: Record<string, string> = {
     'Controls provider catalog behavior: "merge" keeps built-ins and overlays your custom providers, while "replace" uses only your configured providers. In "merge", matching provider IDs preserve non-empty agent models.json apiKey/baseUrl values and fall back to config when agent values are empty or missing; matching model contextWindow/maxTokens use the higher value between explicit and implicit entries.',
   "models.providers":
     "Provider map keyed by provider ID containing connection/auth settings and concrete model definitions. Use stable provider keys so references from agents and tooling remain portable across environments.",
+  "models.providers.*.enabled":
+    "When set to false, the provider is skipped during model resolution and fallback selection without removing its config block. Defaults to true when omitted. Use this to temporarily disable a provider during cost spikes or rate limit incidents.",
   "models.providers.*.baseUrl":
     "Base URL for the provider endpoint used to serve model requests for that provider entry. Use HTTPS endpoints and keep URLs environment-specific through config templating where needed.",
   "models.providers.*.apiKey":

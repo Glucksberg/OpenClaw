@@ -150,6 +150,52 @@ describe("loadModelCatalog", () => {
     );
   });
 
+  it("skips disabled providers from model catalog", async () => {
+    __setModelCatalogImportForTest(
+      async () =>
+        ({
+          discoverAuthStorage: () => ({}),
+          AuthStorage: class {},
+          ModelRegistry: class {
+            getAll() {
+              return [{ id: "gpt-4.1", provider: "openai", name: "GPT-4.1" }];
+            }
+          },
+        }) as unknown as PiSdkModule,
+    );
+
+    const result = await loadModelCatalog({
+      config: {
+        models: {
+          providers: {
+            kilocode: {
+              enabled: false,
+              baseUrl: "https://api.kilo.ai/api/gateway/",
+              api: "openai-completions",
+              models: [
+                {
+                  id: "google/gemini-3-pro-preview",
+                  name: "Gemini 3 Pro Preview",
+                  input: ["text", "image"],
+                  reasoning: true,
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                  contextWindow: 1048576,
+                  maxTokens: 65536,
+                },
+              ],
+            },
+          },
+        },
+      } as OpenClawConfig,
+    });
+
+    expect(
+      result.some(
+        (entry) => entry.provider === "kilocode" && entry.id === "google/gemini-3-pro-preview",
+      ),
+    ).toBe(false);
+  });
+
   it("does not merge configured models for providers that are not opted in", async () => {
     mockSingleOpenAiCatalogModel();
 

@@ -48,6 +48,7 @@ export type ModelDefinitionConfig = {
 };
 
 export type ModelProviderConfig = {
+  enabled?: boolean;
   baseUrl: string;
   apiKey?: SecretInput;
   auth?: ModelProviderAuthMode;

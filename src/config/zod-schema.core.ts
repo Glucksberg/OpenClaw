@@ -226,6 +226,7 @@ export const ModelDefinitionSchema = z
 
 export const ModelProviderSchema = z
   .object({
+    enabled: z.boolean().optional(),
     baseUrl: z.string().min(1),
     apiKey: SecretInputSchema.optional().register(sensitive),
     auth: z
