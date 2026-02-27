@@ -416,7 +416,7 @@ export async function handleTelegramAction(
     }
     const to = readStringParam(params, "to", { required: true });
     const question = readStringParam(params, "question", { required: true });
-    const options = readStringArrayParam(params, "options", { required: true }) ?? [];
+    const options = readStringArrayParam(params, "options", { required: true });
     if (options.length < 2) {
       throw new Error("Poll requires at least two options");
     }
