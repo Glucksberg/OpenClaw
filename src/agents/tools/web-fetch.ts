@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
-import { SsrFBlockedError, type SsrFPolicy } from "../../infra/net/ssrf.js";
+import { isBlockedHostnameOrIp, SsrFBlockedError, type SsrFPolicy } from "../../infra/net/ssrf.js";
 import { logDebug } from "../../logger.js";
 import { wrapExternalContent, wrapWebContent } from "../../security/external-content.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
@@ -140,6 +140,32 @@ function resolveFetchSsrFPolicy(fetch?: WebFetchConfig): SsrFPolicy | undefined 
     ...(allowedHostnames ? { allowedHostnames } : {}),
     ...(hostnameAllowlist ? { hostnameAllowlist } : {}),
   };
+}
+
+/**
+ * Returns true when the URL's hostname would be blocked by default SSRF checks
+ * (i.e. it's a private/internal address) but is only reachable because `ssrfPolicy`
+ * relaxes the restrictions.  In that case we must NOT forward the URL to external
+ * services like Firecrawl, since doing so would leak internal hostnames/paths.
+ */
+function isPrivateNetworkUrl(url: string, policy?: SsrFPolicy): boolean {
+  if (!policy) {
+    return false;
+  }
+  const hasRelaxedPolicy =
+    policy.dangerouslyAllowPrivateNetwork === true ||
+    policy.allowPrivateNetwork === true ||
+    (Array.isArray(policy.allowedHostnames) && policy.allowedHostnames.length > 0);
+  if (!hasRelaxedPolicy) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url);
+    // Check whether the hostname would be blocked under the *default* (no-policy) SSRF rules.
+    return isBlockedHostnameOrIp(parsed.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function resolveFetchMaxCharsCap(fetch?: WebFetchConfig): number {
@@ -518,6 +544,10 @@ async function maybeFetchFirecrawlWebFetchPayload(
     tookMs: number;
   },
 ): Promise<Record<string, unknown> | null> {
+  // Skip Firecrawl for private-network targets to avoid leaking internal URLs to third parties.
+  if (isPrivateNetworkUrl(params.urlToFetch, params.ssrfPolicy)) {
+    return null;
+  }
   const firecrawlParams = toFirecrawlContentParams({
     ...params,
     url: params.urlToFetch,
@@ -541,9 +571,34 @@ async function maybeFetchFirecrawlWebFetchPayload(
   return payload;
 }
 
+/** Stable, compact cache key fragment for the SSRF policy (empty string when no policy). */
+function ssrfPolicyCacheFragment(policy?: SsrFPolicy): string {
+  if (!policy) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (policy.dangerouslyAllowPrivateNetwork) {
+    parts.push("priv");
+  }
+  if (policy.allowPrivateNetwork) {
+    parts.push("apriv");
+  }
+  if (policy.allowRfc2544BenchmarkRange) {
+    parts.push("rfc2544");
+  }
+  if (policy.allowedHostnames?.length) {
+    parts.push(`ah:${policy.allowedHostnames.toSorted().join(",")}`);
+  }
+  if (policy.hostnameAllowlist?.length) {
+    parts.push(`ha:${policy.hostnameAllowlist.toSorted().join(",")}`);
+  }
+  return parts.length > 0 ? parts.join("|") : "";
+}
+
 async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string, unknown>> {
+  const policyFragment = ssrfPolicyCacheFragment(params.ssrfPolicy);
   const cacheKey = normalizeCacheKey(
-    `fetch:${params.url}:${params.extractMode}:${params.maxChars}`,
+    `fetch:${params.url}:${params.extractMode}:${params.maxChars}${policyFragment ? `:${policyFragment}` : ""}`,
   );
   const cached = readCache(FETCH_CACHE, cacheKey);
   if (cached) {
@@ -721,8 +776,16 @@ async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string
 }
 
 async function tryFirecrawlFallback(
-  params: FirecrawlRuntimeParams & { url: string; extractMode: ExtractMode },
+  params: FirecrawlRuntimeParams & {
+    url: string;
+    extractMode: ExtractMode;
+    ssrfPolicy?: SsrFPolicy;
+  },
 ): Promise<{ text: string; title?: string } | null> {
+  // Skip Firecrawl for private-network targets to avoid leaking internal URLs to third parties.
+  if (isPrivateNetworkUrl(params.url, params.ssrfPolicy)) {
+    return null;
+  }
   const firecrawlParams = toFirecrawlContentParams(params);
   if (!firecrawlParams) {
     return null;
