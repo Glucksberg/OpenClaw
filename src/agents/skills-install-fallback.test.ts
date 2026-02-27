@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installSkill } from "./skills-install.js";
 import {
+  findBinaryMock,
   hasBinaryMock,
   runCommandWithTimeoutMock,
   scanDirectoryWithSummaryMock,
@@ -28,6 +29,7 @@ vi.mock("../shared/config-eval.js", async (importOriginal) => {
   return {
     ...actual,
     hasBinary: (bin: string) => hasBinaryMock(bin),
+    findBinary: (bin: string) => findBinaryMock(bin),
   };
 });
 
@@ -100,6 +102,8 @@ describe("skills-install fallback edge cases", () => {
     runCommandWithTimeoutMock.mockClear();
     scanDirectoryWithSummaryMock.mockClear();
     hasBinaryMock.mockClear();
+    findBinaryMock.mockClear();
+    findBinaryMock.mockReturnValue(undefined);
     scanDirectoryWithSummaryMock.mockResolvedValue({ critical: 0, warn: 0, findings: [] });
   });
 

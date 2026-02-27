@@ -2,6 +2,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { SkillsInstallPreferences } from "./skills/types.js";
 
 export {
+  findBinary,
   hasBinary,
   isBundledSkillAllowed,
   isConfigPathTruthy,

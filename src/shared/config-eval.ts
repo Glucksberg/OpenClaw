@@ -172,6 +172,11 @@ function wellKnownBinDirs(): string[] {
   ];
 }
 
+/**
+ * Checks whether `bin` is runnable as a bare command (i.e. present in PATH).
+ * Does NOT search well-known dirs outside PATH — use `findBinary()` when you
+ * need to locate executables in non-PATH directories and can use an absolute path.
+ */
 export function hasBinary(bin: string): boolean {
   const pathEnv = process.env.PATH ?? "";
   const pathExt = process.platform === "win32" ? (process.env.PATHEXT ?? "") : "";
@@ -184,23 +189,8 @@ export function hasBinary(bin: string): boolean {
     return hasBinaryCache.get(bin)!;
   }
 
-  const pathParts = pathEnv.split(path.delimiter).filter(Boolean);
+  const parts = pathEnv.split(path.delimiter).filter(Boolean);
   const extensions = process.platform === "win32" ? windowsPathExtensions() : [""];
-
-  // Merge PATH entries with well-known fallback directories (non-Windows only).
-  // This ensures binaries installed via Homebrew or user-local managers are found
-  // even when the gateway runs under launchd/minimal PATH environments.
-  const seen = new Set(pathParts);
-  const parts = [...pathParts];
-  if (process.platform !== "win32") {
-    for (const dir of wellKnownBinDirs()) {
-      if (!seen.has(dir)) {
-        seen.add(dir);
-        parts.push(dir);
-      }
-    }
-  }
-
   for (const part of parts) {
     for (const ext of extensions) {
       const candidate = path.join(part, bin + ext);
@@ -215,4 +205,54 @@ export function hasBinary(bin: string): boolean {
   }
   hasBinaryCache.set(bin, false);
   return false;
+}
+
+let cachedFindBinaryPath: string | undefined;
+const findBinaryCache = new Map<string, string | undefined>();
+
+/**
+ * Searches PATH and then well-known directories for an executable named `bin`.
+ * Returns the absolute path to the first match, or `undefined` if not found.
+ * Use this when callers can invoke the binary via its absolute path (e.g. brew).
+ * Unlike `hasBinary()`, a truthy return does NOT guarantee bare-name execution.
+ */
+export function findBinary(bin: string): string | undefined {
+  const pathEnv = process.env.PATH ?? "";
+  if (cachedFindBinaryPath !== pathEnv) {
+    cachedFindBinaryPath = pathEnv;
+    findBinaryCache.clear();
+  }
+  if (findBinaryCache.has(bin)) {
+    return findBinaryCache.get(bin);
+  }
+
+  const pathParts = pathEnv.split(path.delimiter).filter(Boolean);
+  const extensions = process.platform === "win32" ? windowsPathExtensions() : [""];
+
+  // Search PATH first, then fall back to well-known dirs (non-Windows only).
+  const seen = new Set(pathParts);
+  const dirs = [...pathParts];
+  if (process.platform !== "win32") {
+    for (const dir of wellKnownBinDirs()) {
+      if (!seen.has(dir)) {
+        seen.add(dir);
+        dirs.push(dir);
+      }
+    }
+  }
+
+  for (const dir of dirs) {
+    for (const ext of extensions) {
+      const candidate = path.join(dir, bin + ext);
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        findBinaryCache.set(bin, candidate);
+        return candidate;
+      } catch {
+        // keep scanning
+      }
+    }
+  }
+  findBinaryCache.set(bin, undefined);
+  return undefined;
 }

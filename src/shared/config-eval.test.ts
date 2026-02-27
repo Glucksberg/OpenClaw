@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { evaluateRuntimeEligibility, hasBinary } from "./config-eval.js";
+import { evaluateRuntimeEligibility, findBinary, hasBinary } from "./config-eval.js";
 
 describe("evaluateRuntimeEligibility", () => {
   it("rejects entries when required OS does not match local or remote", () => {
@@ -86,7 +86,7 @@ describe("hasBinary", () => {
     expect(accessSync).toHaveBeenCalledWith(path.join("/tmp", "tool"), fs.constants.X_OK);
   });
 
-  it("falls back to well-known dirs when PATH is minimal (non-Windows)", () => {
+  it("does NOT search well-known dirs — only PATH", () => {
     if (process.platform === "win32") {
       return;
     }
@@ -102,8 +102,62 @@ describe("hasBinary", () => {
 
     // Minimal PATH that does not contain /opt/homebrew/bin.
     process.env.PATH = "/nonexistent";
-    expect(hasBinary("gh")).toBe(true);
-    expect(accessSync).toHaveBeenCalledWith(homebrewGh, fs.constants.X_OK);
+    expect(hasBinary("gh")).toBe(false);
+  });
+
+  it("returns false when binary is not found anywhere", () => {
+    const accessSync = vi.spyOn(fs, "accessSync");
+    accessSync.mockImplementation(() => {
+      throw new Error("missing");
+    });
+
+    process.env.PATH = "/tmp";
+    expect(hasBinary("does-not-exist-anywhere")).toBe(false);
+  });
+});
+
+describe("findBinary", () => {
+  const originalPath = process.env.PATH;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    process.env.PATH = originalPath;
+    vi.restoreAllMocks();
+  });
+
+  it("returns absolute path for binary found in PATH", () => {
+    const accessSync = vi.spyOn(fs, "accessSync");
+    accessSync.mockImplementation((target) => {
+      if (target === path.join("/usr/local/bin", "node")) {
+        return;
+      }
+      throw new Error("missing");
+    });
+
+    process.env.PATH = "/usr/local/bin";
+    expect(findBinary("node")).toBe(path.join("/usr/local/bin", "node"));
+  });
+
+  it("falls back to well-known dirs when PATH is minimal (non-Windows)", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const homebrewBrew = path.join("/opt/homebrew/bin", "brew");
+    const accessSync = vi.spyOn(fs, "accessSync");
+    accessSync.mockImplementation((target) => {
+      if (target === homebrewBrew) {
+        return;
+      }
+      throw new Error("missing");
+    });
+
+    // Minimal PATH that does not contain /opt/homebrew/bin.
+    process.env.PATH = "/nonexistent";
+    expect(findBinary("brew")).toBe(homebrewBrew);
   });
 
   it("does not duplicate directories already in PATH", () => {
@@ -116,7 +170,7 @@ describe("hasBinary", () => {
 
     // Include /opt/homebrew/bin in PATH; it should not be probed twice.
     process.env.PATH = `/opt/homebrew/bin${path.delimiter}/usr/bin`;
-    hasBinary("nonexistent-binary-xyz");
+    findBinary("nonexistent-binary-xyz");
 
     const homebrewCalls = calls.filter(
       (c) => c === path.join("/opt/homebrew/bin", "nonexistent-binary-xyz"),
@@ -124,13 +178,33 @@ describe("hasBinary", () => {
     expect(homebrewCalls.length).toBe(1);
   });
 
-  it("returns false when binary is not found anywhere", () => {
+  it("returns undefined when binary is not found anywhere", () => {
     const accessSync = vi.spyOn(fs, "accessSync");
     accessSync.mockImplementation(() => {
       throw new Error("missing");
     });
 
     process.env.PATH = "/tmp";
-    expect(hasBinary("does-not-exist-anywhere")).toBe(false);
+    expect(findBinary("does-not-exist-anywhere")).toBeUndefined();
+  });
+
+  it("prefers PATH over well-known dirs", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const pathBrew = path.join("/custom/bin", "brew");
+    const homebrewBrew = path.join("/opt/homebrew/bin", "brew");
+    const accessSync = vi.spyOn(fs, "accessSync");
+    accessSync.mockImplementation((target) => {
+      if (target === pathBrew || target === homebrewBrew) {
+        return;
+      }
+      throw new Error("missing");
+    });
+
+    process.env.PATH = "/custom/bin";
+    // Should return the PATH match, not the well-known dir match.
+    expect(findBinary("brew")).toBe(pathBrew);
   });
 });

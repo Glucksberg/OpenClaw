@@ -4,6 +4,7 @@ export const runCommandWithTimeoutMock: Mock<(...args: unknown[]) => unknown> = 
 export const scanDirectoryWithSummaryMock: Mock<(...args: unknown[]) => unknown> = vi.fn();
 export const fetchWithSsrFGuardMock: Mock<(...args: unknown[]) => unknown> = vi.fn();
 export const hasBinaryMock: Mock<(bin: string) => boolean> = vi.fn();
+export const findBinaryMock: Mock<(bin: string) => string | undefined> = vi.fn();
 
 export function runCommandWithTimeoutFromMock(...args: unknown[]) {
   return runCommandWithTimeoutMock(...args);
@@ -15,6 +16,10 @@ export function fetchWithSsrFGuardFromMock(...args: unknown[]) {
 
 export function hasBinaryFromMock(bin: string) {
   return hasBinaryMock(bin);
+}
+
+export function findBinaryFromMock(bin: string) {
+  return findBinaryMock(bin);
 }
 
 export function scanDirectoryWithSummaryFromMock(...args: unknown[]) {

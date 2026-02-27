@@ -1,6 +1,7 @@
 import type { OpenClawConfig, SkillConfig } from "../../config/config.js";
 import {
   evaluateRuntimeEligibility,
+  findBinary,
   hasBinary,
   isConfigPathTruthyWithDefaults,
   resolveConfigPath,
@@ -14,7 +15,7 @@ const DEFAULT_CONFIG_VALUES: Record<string, boolean> = {
   "browser.evaluateEnabled": true,
 };
 
-export { hasBinary, resolveConfigPath, resolveRuntimePlatform };
+export { findBinary, hasBinary, resolveConfigPath, resolveRuntimePlatform };
 
 export function isConfigPathTruthy(config: OpenClawConfig | undefined, pathStr: string): boolean {
   return isConfigPathTruthyWithDefaults(config, pathStr, DEFAULT_CONFIG_VALUES);

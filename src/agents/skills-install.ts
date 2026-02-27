@@ -8,6 +8,7 @@ import { resolveUserPath } from "../utils.js";
 import { installDownloadSpec } from "./skills-install-download.js";
 import { formatInstallFailureMessage } from "./skills-install-output.js";
 import {
+  findBinary,
   hasBinary,
   loadWorkspaceSkillEntries,
   resolveSkillsInstallPreferences,
@@ -154,7 +155,9 @@ function buildInstallCommand(
 }
 
 async function resolveBrewBinDir(timeoutMs: number, brewExe?: string): Promise<string | undefined> {
-  const exe = brewExe ?? (hasBinary("brew") ? "brew" : resolveBrewExecutable());
+  // Use findBinary to locate brew in PATH or well-known dirs; returns absolute
+  // path so the caller can invoke it even under minimal-PATH environments.
+  const exe = brewExe ?? findBinary("brew") ?? resolveBrewExecutable();
   if (!exe) {
     return undefined;
   }
@@ -438,7 +441,7 @@ export async function installSkill(params: SkillInstallRequest): Promise<SkillIn
     );
   }
 
-  const brewExe = hasBinary("brew") ? "brew" : resolveBrewExecutable();
+  const brewExe = findBinary("brew") ?? resolveBrewExecutable();
   if (spec.kind === "brew" && !brewExe) {
     return withWarnings(resolveBrewMissingFailure(spec), warnings);
   }
