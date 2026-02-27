@@ -397,10 +397,19 @@ export async function handleToolExecutionEnd(
 
   // Track media emitted via tool results (e.g. tts, browser) so that
   // filterMessagingToolMediaDuplicates can strip duplicates from reply payloads.
-  // Skip when shouldEmitToolOutput() is true (verbose=full): in that mode,
-  // emitToolResultOutput wraps output in fenced blocks where splitMediaFromOutput
-  // skips MEDIA: directives, so the media is never actually delivered to the user.
-  if (!isToolError && !isMessagingSend && !ctx.shouldEmitToolOutput()) {
+  // Only track when the delivery path is actually active:
+  // - skip errors and messaging sends (handled above)
+  // - skip verbose=full mode (emitToolResultOutput wraps output in fenced blocks
+  //   where splitMediaFromOutput skips MEDIA: directives)
+  // - skip when onToolResult is absent (e.g. follow-up runs): emitToolResultOutput
+  //   returns early without delivering media, so tracking would cause the final
+  //   reply's only media attachment to be incorrectly stripped as a duplicate.
+  if (
+    !isToolError &&
+    !isMessagingSend &&
+    !ctx.shouldEmitToolOutput() &&
+    ctx.params.onToolResult
+  ) {
     const emittedMediaUrls = filterToolResultMediaUrls(
       toolName,
       extractToolResultMediaPaths(result),
