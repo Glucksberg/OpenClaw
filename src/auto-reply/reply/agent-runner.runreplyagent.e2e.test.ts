@@ -752,12 +752,12 @@ describe("runReplyAgent typing (heartbeat)", () => {
         ? (res[0] as { text?: string })
         : (res as { text?: string });
       if (testCase.expectNotice) {
-        expect(payload.text, testCase.name).toContain("Model Fallback:");
+        expect(payload.text, testCase.name).toContain("Using fallback model");
         expect(payload.text, testCase.name).toContain("deepinfra/moonshotai/Kimi-K2.5");
         expect(sessionEntry.fallbackNoticeReason, testCase.name).toBe("rate limit");
         continue;
       }
-      expect(payload.text, testCase.name).not.toContain("Model Fallback:");
+      expect(payload.text, testCase.name).not.toContain("Using fallback model");
       expect(
         phases.filter((phase) => phase === "fallback"),
         testCase.name,
@@ -812,8 +812,8 @@ describe("runReplyAgent typing (heartbeat)", () => {
 
       const firstText = Array.isArray(first) ? first[0]?.text : first?.text;
       const secondText = Array.isArray(second) ? second[0]?.text : second?.text;
-      expect(firstText).toContain("Model Fallback:");
-      expect(secondText).not.toContain("Model Fallback:");
+      expect(firstText).toContain("Using fallback model");
+      expect(secondText).not.toContain("Using fallback model");
       expect(fallbackEvents).toHaveLength(1);
     } finally {
       fallbackSpy.mockRestore();
@@ -882,9 +882,9 @@ describe("runReplyAgent typing (heartbeat)", () => {
       const firstText = Array.isArray(first) ? first[0]?.text : first?.text;
       const secondText = Array.isArray(second) ? second[0]?.text : second?.text;
       const thirdText = Array.isArray(third) ? third[0]?.text : third?.text;
-      expect(firstText).toContain("Model Fallback:");
-      expect(secondText).not.toContain("Model Fallback:");
-      expect(thirdText).toContain("Model Fallback:");
+      expect(firstText).toContain("Using fallback model");
+      expect(secondText).not.toContain("Using fallback model");
+      expect(thirdText).toContain("Using fallback model");
     } finally {
       fallbackSpy.mockRestore();
     }
@@ -960,7 +960,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
       const firstText = Array.isArray(first) ? first[0]?.text : first?.text;
       const secondText = Array.isArray(second) ? second[0]?.text : second?.text;
       const thirdText = Array.isArray(third) ? third[0]?.text : third?.text;
-      expect(firstText).toContain("Model Fallback:");
+      expect(firstText).toContain("Using fallback model");
       expect(secondText).toContain("Model Fallback cleared:");
       expect(thirdText).not.toContain("Model Fallback cleared:");
       expect(phases.filter((phase) => phase === "fallback")).toHaveLength(1);
@@ -1038,7 +1038,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
 
       const firstText = Array.isArray(first) ? first[0]?.text : first?.text;
       const secondText = Array.isArray(second) ? second[0]?.text : second?.text;
-      expect(firstText).not.toContain("Model Fallback:");
+      expect(firstText).not.toContain("Using fallback model");
       expect(secondText).not.toContain("Model Fallback cleared:");
       expect(phases.filter((phase) => phase === "fallback")).toHaveLength(1);
       expect(phases.filter((phase) => phase === "fallback_cleared")).toHaveLength(1);
@@ -1103,7 +1103,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
         });
         const res = await run();
         const firstText = Array.isArray(res) ? res[0]?.text : res?.text;
-        expect(firstText).not.toContain("Model Fallback:");
+        expect(firstText).not.toContain("Using fallback model");
         expect(sessionEntry.fallbackNoticeReason).toBe(testCase.expectedReason);
       } finally {
         fallbackSpy.mockRestore();
