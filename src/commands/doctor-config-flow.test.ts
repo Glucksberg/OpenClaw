@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { withTempHome } from "../../test/helpers/temp-home.js";
+import { writeConfigFile } from "../config/config.js";
 import * as noteModule from "../terminal/note.js";
 import { loadAndMaybeMigrateDoctorConfig } from "./doctor-config-flow.js";
 import { runDoctorConfigWithInput } from "./doctor-config-flow.test-utils.js";
@@ -143,6 +144,8 @@ describe("doctor config flow", () => {
       mode: "token",
       token: "ok",
     });
+    // Ensure the config flow signals that the file needs writing (#22272)
+    expect(result.shouldWriteConfig).toBe(true);
   });
 
   it("preserves discord streaming intent while stripping unsupported keys on repair", async () => {
@@ -717,5 +720,93 @@ describe("doctor config flow", () => {
     });
 
     expectGoogleChatDmAllowFromRepaired(result.cfg);
+  });
+
+  it("--fix writes cleaned config to disk removing unrecognized keys (#22272)", async () => {
+    await withTempHome(async (home) => {
+      const configDir = path.join(home, ".openclaw");
+      await fs.mkdir(configDir, { recursive: true });
+      const configPath = path.join(configDir, "openclaw.json");
+
+      // Write a config with unrecognized keys inside a strict schema object
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            gateway: { mode: "local", auth: { mode: "token", token: "ok", extra: true } },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      const before = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      expect(before.gateway.auth.extra).toBe(true);
+
+      const result = await loadAndMaybeMigrateDoctorConfig({
+        options: { nonInteractive: true, repair: true },
+        confirm: async () => false,
+      });
+
+      expect(result.shouldWriteConfig).toBe(true);
+
+      // Replicate what doctor.ts does: write the cleaned config
+      await writeConfigFile(result.cfg);
+
+      const after = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      expect(after.gateway?.auth?.extra).toBeUndefined();
+      expect(after.gateway?.auth?.mode).toBe("token");
+      expect(after.gateway?.auth?.token).toBe("ok");
+    });
+  });
+
+  it("--fix removes provider-level unrecognized keys from disk (#22272)", async () => {
+    await withTempHome(async (home) => {
+      const configDir = path.join(home, ".openclaw");
+      await fs.mkdir(configDir, { recursive: true });
+      const configPath = path.join(configDir, "openclaw.json");
+
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            gateway: { mode: "local" },
+            models: {
+              providers: {
+                anthropic: {
+                  baseUrl: "https://api.anthropic.com",
+                  cacheRetention: "long",
+                  models: [{ id: "claude-sonnet-4-20250514", name: "Sonnet" }],
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      const before = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      expect(before.models.providers.anthropic.cacheRetention).toBe("long");
+
+      const result = await loadAndMaybeMigrateDoctorConfig({
+        options: { nonInteractive: true, repair: true },
+        confirm: async () => false,
+      });
+
+      expect(result.shouldWriteConfig).toBe(true);
+      expect(
+        (result.cfg as Record<string, unknown> & { models: Record<string, unknown> }).models
+          ?.providers,
+      ).toBeDefined();
+
+      await writeConfigFile(result.cfg);
+
+      const after = JSON.parse(await fs.readFile(configPath, "utf-8"));
+      expect(after.models?.providers?.anthropic?.cacheRetention).toBeUndefined();
+      expect(after.models?.providers?.anthropic?.baseUrl).toBe("https://api.anthropic.com");
+    });
   });
 });
