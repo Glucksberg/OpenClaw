@@ -4,6 +4,8 @@ import type { TtsConfig } from "./types.tts.js";
 export type GroupChatConfig = {
   mentionPatterns?: string[];
   historyLimit?: number;
+  /** Restrict this agent to specific chat types. Omit to allow all types. */
+  allowedChatTypes?: Array<"direct" | "group" | "channel">;
 };
 
 export type DmConfig = {
