@@ -38,6 +38,18 @@ describe("normalizePlaceholders", () => {
     expect(normalizePlaceholders("{{Prompt}}")).toBe("{{Prompt}}");
   });
 
+  it("should preserve already-correct {{OutputDir}} format", () => {
+    expect(normalizePlaceholders("{{OutputDir}}")).toBe("{{OutputDir}}");
+  });
+
+  it("should preserve already-correct {{OutputBase}} format", () => {
+    expect(normalizePlaceholders("{{OutputBase}}")).toBe("{{OutputBase}}");
+  });
+
+  it("should preserve already-correct {{MediaDir}} format", () => {
+    expect(normalizePlaceholders("{{MediaDir}}")).toBe("{{MediaDir}}");
+  });
+
   it("should work with mixed content", () => {
     const input = "--input {file} --output {output}";
     const expected = "--input {{MediaPath}} --output {{OutputDir}}";
