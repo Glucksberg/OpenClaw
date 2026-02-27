@@ -12,7 +12,7 @@ import { createSlackThreadTsResolver } from "./thread-resolution.js";
 
 export type SlackMessageHandler = (
   message: SlackMessageEvent,
-  opts: { source: "message" | "app_mention"; wasMentioned?: boolean },
+  opts: { source: "message" | "app_mention" | "block_action"; wasMentioned?: boolean },
 ) => Promise<void>;
 
 function resolveSlackSenderId(message: SlackMessageEvent): string | null {
@@ -87,7 +87,7 @@ export function createSlackMessageHandler(params: {
   const { ctx, account, trackEvent } = params;
   const { debounceMs, debouncer } = createChannelInboundDebouncer<{
     message: SlackMessageEvent;
-    opts: { source: "message" | "app_mention"; wasMentioned?: boolean };
+    opts: { source: "message" | "app_mention" | "block_action"; wasMentioned?: boolean };
   }>({
     cfg: ctx.cfg,
     channel: "slack",
