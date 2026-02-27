@@ -1,5 +1,6 @@
 import type { Api, Context, Model } from "@mariozechner/pi-ai";
 import { complete } from "@mariozechner/pi-ai";
+import { FailoverError } from "../../agents/failover-error.js";
 import { minimaxUnderstandImage } from "../../agents/minimax-vlm.js";
 import { getApiKeyForModel, requireApiKey } from "../../agents/model-auth.js";
 import { ensureOpenClawModelsJson } from "../../agents/models-config.js";
@@ -24,7 +25,13 @@ export async function describeImageWithModel(
   const modelRegistry = discoverModels(authStorage, params.agentDir);
   const model = modelRegistry.find(params.provider, params.model) as Model<Api> | null;
   if (!model) {
-    throw new Error(`Unknown model: ${params.provider}/${params.model}`);
+    // Throw FailoverError so callers with fallback logic can cascade to the
+    // next candidate instead of treating this as a fatal error.
+    throw new FailoverError(`Unknown model: ${params.provider}/${params.model}`, {
+      reason: "model_not_found",
+      provider: params.provider,
+      model: params.model,
+    });
   }
   if (!model.input?.includes("image")) {
     throw new Error(`Model does not support images: ${params.provider}/${params.model}`);
