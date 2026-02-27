@@ -47,7 +47,8 @@ function resolveFallbackSettings(): ResolvedSettings {
   const override = loggingState.overrideSettings as LoggerSettings | null;
   const level = normalizeLogLevel(override?.level, "info");
   const file = override?.file ?? defaultRollingPathForToday();
-  return { level, file };
+  const maxFileBytes = resolveMaxLogFileBytes(undefined);
+  return { level, file, maxFileBytes };
 }
 
 function attachExternalTransport(logger: TsLogger<LogObj>, transport: LogTransport): void {
