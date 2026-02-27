@@ -237,10 +237,12 @@ export const telegramMessageActions: ChannelMessageActionAdapter = {
       const to =
         readStringParam(params, "to") ?? readStringParam(params, "target", { required: true });
       const question = readStringParam(params, "pollQuestion", { required: true });
-      const options = readStringArrayParam(params, "pollOption", { required: true }) ?? [];
+      const options = readStringArrayParam(params, "pollOption", { required: true });
       const allowMultiselect = typeof params.pollMulti === "boolean" ? params.pollMulti : false;
       const maxSelections = allowMultiselect ? Math.max(2, options.length) : 1;
-      const durationSeconds = readNumberParam(params, "pollDurationSeconds", { integer: true });
+      const pollDurationHours = readNumberParam(params, "pollDurationHours", { integer: false });
+      const pollDurationSeconds = readNumberParam(params, "pollDurationSeconds", { integer: true });
+      const durationSeconds = pollDurationSeconds ?? (pollDurationHours != null ? Math.round(pollDurationHours * 3600) : undefined);
       const isAnonymous =
         typeof params.pollAnonymous === "boolean" && params.pollAnonymous
           ? true
