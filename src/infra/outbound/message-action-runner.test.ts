@@ -1188,14 +1188,16 @@ describe("runMessageAction outbound allowlist enforcement", () => {
 
   it("blocks poll to a target not in the allowFrom list", async () => {
     await expect(
-      runDryAction({
+      runMessageAction({
         cfg: restrictedConfig,
-        action: "send" as const,
-        actionParams: {
+        action: "poll",
+        params: {
           channel: "whatsapp",
           target: "+15559999999",
-          message: "hello",
+          pollQuestion: "Favorite color?",
+          pollOption: ["Red", "Blue"],
         },
+        dryRun: true,
       }),
     ).rejects.toThrow(/Target not in allowlist/);
   });
