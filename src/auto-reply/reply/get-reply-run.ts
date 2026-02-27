@@ -16,6 +16,7 @@ import {
   updateSessionStore,
 } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { clearCommandLane, getQueueSize } from "../../process/command-queue.js";
 import { normalizeMainKey } from "../../routing/session-key.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
@@ -49,6 +50,8 @@ import { resolveTypingMode } from "./typing-mode.js";
 import { resolveRunTypingPolicy } from "./typing-policy.js";
 import type { TypingController } from "./typing.js";
 import { appendUntrustedContext } from "./untrusted-context.js";
+
+const log = createSubsystemLogger("reply-run");
 
 type AgentDefaults = NonNullable<OpenClawConfig["agents"]>["defaults"];
 type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;
@@ -385,6 +388,9 @@ export async function runPreparedReply(
         text: `Thinking level "xhigh" is only supported for ${formatXHighModelHint()}. Use /think high or switch to one of those models.`,
       };
     }
+    log.warn(
+      `thinking level "xhigh" not supported for ${provider}/${model}, falling back to "high"`,
+    );
     resolvedThinkLevel = "high";
     if (sessionEntry && sessionStore && sessionKey && sessionEntry.thinkingLevel === "xhigh") {
       sessionEntry.thinkingLevel = "high";

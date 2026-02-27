@@ -29,6 +29,8 @@ export const XHIGH_MODEL_REFS = [
   "openai-codex/gpt-5.1-codex",
   "github-copilot/gpt-5.2-codex",
   "github-copilot/gpt-5.2",
+  // Anthropic Opus 4.6 supports adaptive thinking with effort "max" via pi-ai.
+  "anthropic/claude-opus-4-6",
 ] as const;
 
 const XHIGH_MODEL_SET = new Set(XHIGH_MODEL_REFS.map((entry) => entry.toLowerCase()));
@@ -78,6 +80,11 @@ export function supportsXHighThinking(provider?: string | null, model?: string |
   const modelKey = model?.trim().toLowerCase();
   if (!modelKey) {
     return false;
+  }
+  // Anthropic Opus 4.6 supports xhigh (mapped to adaptive effort "max" by pi-ai)
+  // regardless of the provider (direct Anthropic, Bedrock, OpenRouter, etc.).
+  if (modelKey.includes("opus-4-6") || modelKey.includes("opus-4.6")) {
+    return true;
   }
   const providerKey = provider?.trim().toLowerCase();
   if (providerKey) {

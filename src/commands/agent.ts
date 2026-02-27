@@ -61,6 +61,7 @@ import {
 } from "../infra/agent-events.js";
 import { buildOutboundSessionContext } from "../infra/outbound/session-context.js";
 import { getRemoteSkillEligibility } from "../infra/skills-remote.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { applyVerboseOverride } from "../sessions/level-overrides.js";
@@ -72,6 +73,8 @@ import { resolveAgentRunContext } from "./agent/run-context.js";
 import { updateSessionStoreAfterAgentRun } from "./agent/session-store.js";
 import { resolveSession } from "./agent/session.js";
 import type { AgentCommandOpts } from "./agent/types.js";
+
+const log = createSubsystemLogger("agent-command");
 
 type PersistSessionEntryParams = {
   sessionStore: Record<string, SessionEntry>;
@@ -652,6 +655,9 @@ export async function agentCommand(
       if (explicitThink) {
         throw new Error(`Thinking level "xhigh" is only supported for ${formatXHighModelHint()}.`);
       }
+      log.warn(
+        `thinking level "xhigh" not supported for ${provider}/${model}, falling back to "high"`,
+      );
       resolvedThinkLevel = "high";
       if (sessionEntry && sessionStore && sessionKey && sessionEntry.thinkingLevel === "xhigh") {
         const entry = sessionEntry;

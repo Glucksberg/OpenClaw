@@ -4,6 +4,7 @@ import {
   listThinkingLevels,
   normalizeReasoningLevel,
   normalizeThinkLevel,
+  supportsXHighThinking,
 } from "./thinking.js";
 
 describe("normalizeThinkLevel", () => {
@@ -51,8 +52,43 @@ describe("listThinkingLevels", () => {
     expect(listThinkingLevels("github-copilot", "gpt-5.2-codex")).toContain("xhigh");
   });
 
-  it("excludes xhigh for non-codex models", () => {
+  it("includes xhigh for anthropic opus-4-6", () => {
+    expect(listThinkingLevels("anthropic", "claude-opus-4-6")).toContain("xhigh");
+  });
+
+  it("includes xhigh for opus-4-6 on any provider (bedrock, openrouter)", () => {
+    expect(listThinkingLevels("amazon-bedrock", "anthropic.claude-opus-4-6-v1:0")).toContain(
+      "xhigh",
+    );
+    expect(listThinkingLevels("openrouter", "anthropic/claude-opus-4-6-20250415")).toContain(
+      "xhigh",
+    );
+  });
+
+  it("excludes xhigh for non-codex/non-opus models", () => {
     expect(listThinkingLevels(undefined, "gpt-4.1-mini")).not.toContain("xhigh");
+  });
+
+  it("excludes xhigh for non-opus anthropic models", () => {
+    expect(listThinkingLevels("anthropic", "claude-sonnet-4-5")).not.toContain("xhigh");
+  });
+});
+
+describe("supportsXHighThinking", () => {
+  it("supports anthropic opus-4-6 via direct provider", () => {
+    expect(supportsXHighThinking("anthropic", "claude-opus-4-6")).toBe(true);
+  });
+
+  it("supports opus-4-6 without provider prefix", () => {
+    expect(supportsXHighThinking(undefined, "claude-opus-4-6")).toBe(true);
+  });
+
+  it("supports opus-4-6 via bedrock model id", () => {
+    expect(supportsXHighThinking("amazon-bedrock", "anthropic.claude-opus-4-6-v1:0")).toBe(true);
+  });
+
+  it("does not support non-opus anthropic models", () => {
+    expect(supportsXHighThinking("anthropic", "claude-sonnet-4-5")).toBe(false);
   });
 });
 
