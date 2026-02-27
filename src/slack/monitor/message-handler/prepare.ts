@@ -112,8 +112,9 @@ async function resolveSlackConversationContext(params: {
   ctx: SlackMonitorContext;
   account: ResolvedSlackAccount;
   message: SlackMessageEvent;
-}): Promise<SlackConversationContext> {
-  const { ctx, account, message } = params;
+  opts: { source: "message" | "app_mention" | "block_action"; wasMentioned?: boolean };
+}): Promise<PreparedSlackMessage | null> {
+  const { ctx, account, message, opts } = params;
   const cfg = ctx.cfg;
 
   let channelInfo: {
