@@ -1,5 +1,6 @@
 import { createDraftStreamLoop } from "../channels/draft-stream-loop.js";
 import { deleteSlackMessage, editSlackMessage } from "./actions.js";
+import { markdownToSlackMrkdwn } from "./format.js";
 import { sendMessageSlack } from "./send.js";
 
 const SLACK_STREAM_MAX_CHARS = 4000;
@@ -59,7 +60,11 @@ export function createSlackDraftStream(params: {
     lastSentText = trimmed;
     try {
       if (streamChannelId && streamMessageId) {
-        await edit(streamChannelId, streamMessageId, trimmed, {
+        // Convert markdown to Slack mrkdwn so style markers render correctly
+        // in the preview edit (sendMessageSlack already handles this for the
+        // initial message, but edits bypass that pipeline).
+        const mrkdwnText = markdownToSlackMrkdwn(trimmed);
+        await edit(streamChannelId, streamMessageId, mrkdwnText, {
           token: params.token,
           accountId: params.accountId,
         });
