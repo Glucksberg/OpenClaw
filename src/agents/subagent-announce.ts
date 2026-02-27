@@ -1,4 +1,5 @@
 import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
+import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
 import { loadConfig } from "../config/config.js";
@@ -82,7 +83,8 @@ function buildCompletionDeliveryMessage(params: {
   outcome?: SubagentRunOutcome;
   announceType?: SubagentAnnounceType;
 }): string {
-  const findingsText = params.findings.trim();
+  // Strip reply directive tags (e.g. [[reply_to:6100]]) before delivery (#24600)
+  const findingsText = parseReplyDirectives(params.findings).text.trim();
   if (isAnnounceSkip(findingsText)) {
     return "";
   }
