@@ -669,8 +669,11 @@ export function resolveSessionModelRef(
   // then finally to configured defaults.
   const storedModelOverride = entry?.modelOverride?.trim();
   if (storedModelOverride) {
-    const overrideProvider = entry?.providerOverride?.trim() || provider || DEFAULT_PROVIDER;
-    const parsedOverride = parseModelRef(storedModelOverride, overrideProvider);
+    const explicitProviderOverride = entry?.providerOverride?.trim();
+    const overrideProvider = explicitProviderOverride || provider || DEFAULT_PROVIDER;
+    const parsedOverride = parseModelRef(storedModelOverride, overrideProvider, {
+      providerExplicit: !!explicitProviderOverride,
+    });
     if (parsedOverride) {
       provider = parsedOverride.provider;
       model = parsedOverride.model;

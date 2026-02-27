@@ -719,7 +719,9 @@ async function agentCommandInternal(
     const storedModelOverride = sessionEntry?.modelOverride?.trim();
     if (storedModelOverride) {
       const candidateProvider = storedProviderOverride || defaultProvider;
-      const normalizedStored = normalizeModelRef(candidateProvider, storedModelOverride);
+      const normalizedStored = normalizeModelRef(candidateProvider, storedModelOverride, {
+        providerExplicit: !!storedProviderOverride,
+      });
       const key = modelKey(normalizedStored.provider, normalizedStored.model);
       if (
         isCliProvider(normalizedStored.provider, cfg) ||
