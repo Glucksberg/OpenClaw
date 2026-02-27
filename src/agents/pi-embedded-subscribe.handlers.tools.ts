@@ -395,6 +395,19 @@ export async function handleToolExecutionEnd(
     }
   }
 
+  // Track media emitted via tool results (e.g. tts, browser) so that
+  // filterMessagingToolMediaDuplicates can strip duplicates from reply payloads.
+  if (!isToolError && !isMessagingSend) {
+    const emittedMediaUrls = filterToolResultMediaUrls(
+      toolName,
+      extractToolResultMediaPaths(result),
+    );
+    if (emittedMediaUrls.length > 0) {
+      ctx.state.messagingToolSentMediaUrls.push(...emittedMediaUrls);
+      ctx.trimMessagingToolSent();
+    }
+  }
+
   // Track committed reminders only when cron.add completed successfully.
   if (!isToolError && toolName === "cron" && isCronAddAction(startData?.args)) {
     ctx.state.successfulCronAdds += 1;
