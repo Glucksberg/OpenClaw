@@ -43,7 +43,14 @@ if [ "${#lint_files[@]}" -gt 0 ]; then
 fi
 
 if [ "${#format_files[@]}" -gt 0 ]; then
-  "$RUN_NODE_TOOL" oxfmt --write -- "${format_files[@]}"
+  # oxfmt exits 2 ("Expected at least one target file") when all passed files
+  # fall inside ignorePatterns (e.g. export-html/). Tolerate that exit code.
+  "$RUN_NODE_TOOL" oxfmt --write -- "${format_files[@]}" || {
+    ec=$?
+    if [ "$ec" -ne 2 ]; then
+      exit "$ec"
+    fi
+  }
 fi
 
 git add -- "${files[@]}"

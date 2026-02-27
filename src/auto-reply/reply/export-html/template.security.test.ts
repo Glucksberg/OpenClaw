@@ -79,6 +79,34 @@ function now() {
   return new Date("2026-02-24T00:00:00.000Z").toISOString();
 }
 
+describe("export html template placeholders", () => {
+  // Regression: a formatter once rewrote {{MARKED_JS}} into { { MARKED_JS; } },
+  // breaking generateHtml()'s .replace() calls and producing broken exports (#22595).
+  it("contains literal placeholder strings that generateHtml expects", () => {
+    for (const placeholder of ["{{CSS}}", "{{SESSION_DATA}}", "{{MARKED_JS}}", "{{HIGHLIGHT_JS}}", "{{JS}}"]) {
+      expect(templateHtml).toContain(placeholder);
+    }
+  });
+
+  it("replaces all placeholders with substitute content", () => {
+    const result = templateHtml
+      .replace("{{CSS}}", "/* css */")
+      .replace("{{SESSION_DATA}}", "BASE64DATA")
+      .replace("{{MARKED_JS}}", "var marked=1;")
+      .replace("{{HIGHLIGHT_JS}}", "var hljs=1;")
+      .replace("{{JS}}", "var app=1;");
+
+    // None of the placeholders should remain after replacement
+    for (const placeholder of ["{{CSS}}", "{{SESSION_DATA}}", "{{MARKED_JS}}", "{{HIGHLIGHT_JS}}", "{{JS}}"]) {
+      expect(result).not.toContain(placeholder);
+    }
+    // Substituted content should be present
+    expect(result).toContain("var marked=1;");
+    expect(result).toContain("var hljs=1;");
+    expect(result).toContain("var app=1;");
+  });
+});
+
 describe("export html security hardening", () => {
   it("escapes raw HTML from markdown blocks", () => {
     const attack = "<img src=x onerror=alert(1)>";
