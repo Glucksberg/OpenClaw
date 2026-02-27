@@ -7,6 +7,12 @@ type OriginCheckResult =
     }
   | { ok: false; reason: string };
 
+function isChromeExtensionOrigin(origin?: string): boolean {
+  return (
+    typeof origin === "string" && origin.trim().toLowerCase().startsWith("chrome-extension://")
+  );
+}
+
 function parseOrigin(
   originRaw?: string,
 ): { origin: string; host: string; hostname: string } | null {
@@ -57,6 +63,14 @@ export function checkBrowserOrigin(params: {
   // Dev fallback only for genuinely local socket clients, not Host-header claims.
   if (params.isLocalClient && isLoopbackHost(parsedOrigin.hostname)) {
     return { ok: true, matchedBy: "local-loopback" };
+  }
+
+  // Chrome extensions always connect from localhost.  Their origin is
+  // "chrome-extension://<id>" which is not loopback, but the connection
+  // itself originates from the local machine, so treat it as trusted when
+  // the request host resolves to loopback.
+  if (isChromeExtensionOrigin(params.origin) && isLoopbackHost(requestHostname)) {
+    return { ok: true };
   }
 
   return { ok: false, reason: "origin not allowed" };

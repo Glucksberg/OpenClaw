@@ -731,6 +731,25 @@ export function attachGatewayUpgradeHandler(opts: {
       if (scopedCanvas.rewrittenUrl) {
         req.url = scopedCanvas.rewrittenUrl;
       }
+      // Reject browser-extension relay connections that land on the gateway
+      // port by mistake.  The Chrome extension should connect to the dedicated
+      // relay server (default port 18792), not the main gateway WS endpoint.
+      {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        if (url.pathname === "/extension" || url.pathname === "/extension/") {
+          socket.write(
+            "HTTP/1.1 400 Bad Request\r\n" +
+              "Content-Type: text/plain; charset=utf-8\r\n" +
+              "Connection: close\r\n" +
+              "\r\n" +
+              "Browser extension WebSocket connections are not handled on this port. " +
+              "Set the extension relay port (default 18792) in the extension options.",
+          );
+          socket.destroy();
+          return;
+        }
+      }
+
       if (canvasHost) {
         const url = new URL(req.url ?? "/", "http://localhost");
         if (url.pathname === CANVAS_WS_PATH) {
