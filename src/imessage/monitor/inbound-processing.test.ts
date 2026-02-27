@@ -112,3 +112,172 @@ describe("resolveIMessageInboundDecision command auth", () => {
     expect(decision.commandAuthorized).toBe(true);
   });
 });
+
+describe("resolveIMessageInboundDecision group allowlist bypass (is_group=false)", () => {
+  // Config with group allowlist: only chat_id "3" is allowed; "5" is excluded.
+  const cfgWithGroupAllowlist: OpenClawConfig = {
+    channels: {
+      imessage: {
+        groups: {
+          "3": {},
+        },
+      },
+    },
+  } as unknown as OpenClawConfig;
+
+  it("blocks message from excluded group even when is_group=false", () => {
+    const logVerbose = vi.fn();
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithGroupAllowlist,
+      accountId: "default",
+      message: {
+        id: 200,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: false,
+        chat_id: 5,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose,
+    });
+
+    expect(decision).toEqual({ kind: "drop", reason: "group id not in allowlist" });
+    expect(logVerbose).toHaveBeenCalledWith(expect.stringContaining("pre-isGroup enforcement"));
+  });
+
+  it("blocks message from excluded group when is_group is null/undefined", () => {
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithGroupAllowlist,
+      accountId: "default",
+      message: {
+        id: 201,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: null as unknown as boolean,
+        chat_id: 5,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose: undefined,
+    });
+
+    expect(decision).toEqual({ kind: "drop", reason: "group id not in allowlist" });
+  });
+
+  it("allows message from an allowed group when is_group=false", () => {
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithGroupAllowlist,
+      accountId: "default",
+      message: {
+        id: 202,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: false,
+        chat_id: 3,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose: undefined,
+    });
+
+    expect(decision.kind).toBe("dispatch");
+  });
+
+  it("allows DMs without chat_id (no false positive blocking)", () => {
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithGroupAllowlist,
+      accountId: "default",
+      message: {
+        id: 203,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: false,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose: undefined,
+    });
+
+    expect(decision.kind).toBe("dispatch");
+  });
+
+  it("allows all groups when wildcard (*) is configured", () => {
+    const cfgWithWildcard: OpenClawConfig = {
+      channels: {
+        imessage: {
+          groups: {
+            "*": {},
+          },
+        },
+      },
+    } as unknown as OpenClawConfig;
+
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithWildcard,
+      accountId: "default",
+      message: {
+        id: 204,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: false,
+        chat_id: 99,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose: undefined,
+    });
+
+    expect(decision.kind).toBe("dispatch");
+  });
+});
