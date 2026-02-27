@@ -182,7 +182,7 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     label: "message",
     description: "Send messages",
     sectionId: "messaging",
-    profiles: ["messaging"],
+    profiles: ["coding", "messaging"],
     includeInOpenClawGroup: true,
   },
   {

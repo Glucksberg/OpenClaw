@@ -428,6 +428,13 @@ describe("createOpenClawCodingTools", () => {
     expect(names.has("edit")).toBe(false);
     expect(names.has("exec")).toBe(true);
   });
+  it("coding profile includes the message tool (#22828)", () => {
+    const tools = createOpenClawCodingTools({
+      config: { tools: { profile: "coding" } },
+    });
+    const names = new Set(tools.map((tool) => tool.name));
+    expect(names.has("message")).toBe(true);
+  });
   it("lets agent profiles override global profiles", () => {
     const tools = createOpenClawCodingTools({
       sessionKey: "agent:work:main",
