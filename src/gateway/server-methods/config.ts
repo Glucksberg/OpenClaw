@@ -341,26 +341,32 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const merged = applyMergePatch(snapshot.config, parsedRes.parsed, {
-      mergeObjectArraysById: true,
-    });
     const schemaPatch = loadSchemaWithPlugins();
-    const restoredMerge = restoreRedactedValues(merged, snapshot.config, schemaPatch.uiHints);
-    if (!restoredMerge.ok) {
+    // Restore redacted sentinels in the patch *before* merging, so we can
+    // check only the fields the caller is actually changing for placeholders.
+    // This avoids false positives from existing placeholder-like values in
+    // untouched parts of the config (P2: config.patch scope).
+    const restoredPatch = restoreRedactedValues(
+      parsedRes.parsed,
+      snapshot.config,
+      schemaPatch.uiHints,
+    );
+    if (!restoredPatch.ok) {
       respond(
         false,
         undefined,
         errorShape(
           ErrorCodes.INVALID_REQUEST,
-          restoredMerge.humanReadableMessage ?? "invalid config",
+          restoredPatch.humanReadableMessage ?? "invalid config",
         ),
       );
       return;
     }
     // Guard: reject obvious placeholder/example secrets before writing to disk.
-    // This prevents redacted template payloads from silently overwriting real credentials.
+    // Only check the patch input (not the entire merged config) so existing
+    // placeholder-like values in untouched fields don't cause spurious errors.
     const placeholderCheckPatch = rejectPlaceholderSecrets(
-      restoredMerge.result,
+      restoredPatch.result,
       schemaPatch.uiHints,
     );
     if (!placeholderCheckPatch.ok) {
@@ -370,6 +376,21 @@ export const configHandlers: GatewayRequestHandlers = {
         errorShape(
           ErrorCodes.INVALID_REQUEST,
           placeholderCheckPatch.humanReadableMessage ?? "placeholder secret in config",
+        ),
+      );
+      return;
+    }
+    const merged = applyMergePatch(snapshot.config, restoredPatch.result as Record<string, unknown>, {
+      mergeObjectArraysById: true,
+    });
+    const restoredMerge = restoreRedactedValues(merged, snapshot.config, schemaPatch.uiHints);
+    if (!restoredMerge.ok) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          restoredMerge.humanReadableMessage ?? "invalid config",
         ),
       );
       return;

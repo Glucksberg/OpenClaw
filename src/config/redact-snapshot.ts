@@ -443,25 +443,103 @@ function isPlaceholderSecretValue(value: string): boolean {
 }
 
 /**
+ * Generate all wildcard-expanded variants of a dotted config path.
+ * For "a.b.c" returns ["a.b.c", "a.b.*", "a.*.c", "*.b.c", "a.*.*", "*.b.*", "*.*.c", "*.*.*"].
+ * For single-segment paths, returns [path, "*"].
+ * Used to match hints like "plugins.entries.*.apiKey" when the concrete path
+ * is "plugins.entries.voice-call.apiKey".
+ */
+function wildcardVariants(path: string): string[] {
+  const parts = path.split(".");
+  if (parts.length <= 1) {
+    return [path];
+  }
+  // Generate 2^n combinations (each segment can be itself or "*")
+  const count = 1 << parts.length;
+  const variants: string[] = [];
+  for (let mask = 0; mask < count; mask++) {
+    const segments: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      segments.push(mask & (1 << i) ? "*" : parts[i]);
+    }
+    variants.push(segments.join("."));
+  }
+  return variants;
+}
+
+/**
+ * Check if any wildcard variant of the path is marked sensitive in hints.
+ * Returns true if any variant has sensitive === true.
+ */
+function isHintSensitive(hints: ConfigUiHints | undefined, path: string): boolean {
+  if (!hints) return false;
+  for (const variant of wildcardVariants(path)) {
+    if (hints[variant]?.sensitive === true) return true;
+  }
+  return false;
+}
+
+/**
+ * Check if any wildcard variant of the path is explicitly non-sensitive in hints.
+ * Returns true if any variant has sensitive === false.
+ */
+function isHintExplicitlyNonSensitive(hints: ConfigUiHints | undefined, path: string): boolean {
+  if (!hints) return false;
+  for (const variant of wildcardVariants(path)) {
+    if (hints[variant]?.sensitive === false) return true;
+  }
+  return false;
+}
+
+/**
+ * Check if any wildcard variant of the array-suffixed path is sensitive in hints.
+ * Needed for "customArray[]" style paths from ConfigUiHints.
+ */
+function isArrayPathHintSensitive(hints: ConfigUiHints | undefined, arrayPath: string): boolean {
+  if (!hints) return false;
+  // arrayPath looks like "foo.bar[]"; check both "foo.bar[]" and wildcard variants
+  // Also check the base path without "[]" since hints may mark the parent
+  const basePath = arrayPath.endsWith("[]") ? arrayPath.slice(0, -2) : arrayPath;
+  for (const variant of wildcardVariants(arrayPath)) {
+    if (hints[variant]?.sensitive === true) return true;
+  }
+  for (const variant of wildcardVariants(basePath)) {
+    if (hints[variant]?.sensitive === true) return true;
+  }
+  return false;
+}
+
+/**
  * Deep-walk `config` and collect the first sensitive path that contains an
  * obvious placeholder secret value (e.g. "REDACTED", "your-token", etc.).
  * Returns `null` when no placeholder is found.
+ *
+ * @param parentSensitive When true, the parent node was determined to be
+ *   sensitive (e.g. a serviceAccount object). All leaf strings inside inherit
+ *   that sensitivity without needing their own path match.
  */
 function findPlaceholderSecretPath(
   obj: unknown,
   prefix: string,
   hints: ConfigUiHints | undefined,
+  parentSensitive = false,
 ): string | null {
   if (obj === null || obj === undefined || typeof obj !== "object") {
     return null;
   }
   if (Array.isArray(obj)) {
     const path = `${prefix}[]`;
+    // Check sensitivity via hints (including wildcard variants) and pattern guessing.
+    // Explicit sensitive:false overrides parent propagation and pattern guessing.
+    const hintSens = isArrayPathHintSensitive(hints, path);
+    const hintNonSens = isHintExplicitlyNonSensitive(hints, path);
+    const guessSens = !hintSens && !hintNonSens && isSensitivePath(path);
+    const arraySensitive = hintNonSens ? false : parentSensitive || hintSens || guessSens;
     for (const item of obj) {
-      if (typeof item === "string" && isSensitivePath(path) && isPlaceholderSecretValue(item)) {
+      if (typeof item === "string" && arraySensitive && isPlaceholderSecretValue(item)) {
         return path;
       }
-      const nested = findPlaceholderSecretPath(item, path, hints);
+      const nested = findPlaceholderSecretPath(item, path, hints, arraySensitive);
       if (nested) {
         return nested;
       }
@@ -470,18 +548,28 @@ function findPlaceholderSecretPath(
   }
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
     const path = prefix ? `${prefix}.${key}` : key;
-    const wildcardPath = prefix ? `${prefix}.*` : "*";
-    // Determine whether this path is sensitive via hints (preferred) or pattern guessing
-    const hintSensitive =
-      hints && (hints[path]?.sensitive === true || hints[wildcardPath]?.sensitive === true);
-    const hintExplicitlyNonSensitive =
-      hints && (hints[path]?.sensitive === false || hints[wildcardPath]?.sensitive === false);
-    const guessSensitive = !hintSensitive && !hintExplicitlyNonSensitive && isSensitivePath(path);
-    const sensitive = hintSensitive || guessSensitive;
+    // Determine whether this path is sensitive via hints (with wildcard matching) or pattern guessing.
+    const hintSens = isHintSensitive(hints, path);
+    const hintNonSens = isHintExplicitlyNonSensitive(hints, path);
+    // Explicit sensitive:false in hints overrides both parent propagation and pattern guessing.
+    const guessSens = !hintSens && !hintNonSens && isSensitivePath(path);
+    const sensitive = hintNonSens ? false : parentSensitive || hintSens || guessSens;
+
     if (sensitive && typeof value === "string" && isPlaceholderSecretValue(value)) {
       return path;
     }
-    const nested = findPlaceholderSecretPath(value, path, hints);
+    // Propagate sensitivity into children: if this node is a sensitive object
+    // (e.g. serviceAccount), all nested strings inherit sensitivity.
+    const childSensitive =
+      sensitive && typeof value === "object" && value !== null && !Array.isArray(value)
+        ? isWholeObjectSensitivePath(path) || hintSens
+        : false;
+    const nested = findPlaceholderSecretPath(
+      value,
+      path,
+      hints,
+      parentSensitive || childSensitive,
+    );
     if (nested) {
       return nested;
     }

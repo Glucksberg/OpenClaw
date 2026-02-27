@@ -1255,6 +1255,242 @@ describe("rejectPlaceholderSecrets", () => {
       expect(result.ok).toBe(true);
     });
   });
+
+  describe("P1: propagate sensitivity into nested object values", () => {
+    it("rejects placeholder inside a sensitive object (serviceAccount)", () => {
+      // channels.googlechat.serviceAccount is a sensitive whole-object path.
+      // Nested keys like private_key don't themselves match isSensitivePath,
+      // but they should still be checked because the parent is sensitive.
+      const result = rejectPlaceholderSecrets({
+        channels: {
+          googlechat: {
+            serviceAccount: {
+              type: "service_account",
+              project_id: "my-project",
+              private_key: "REDACTED",
+            },
+          },
+        },
+      });
+      expect(result.ok).toBe(false);
+      expect(result.humanReadableMessage).toContain("private_key");
+    });
+
+    it("rejects placeholder deeply nested inside a sensitive object", () => {
+      const result = rejectPlaceholderSecrets({
+        channels: {
+          googlechat: {
+            serviceAccount: {
+              nested: { deep: { value: "REPLACE_ME" } },
+            },
+          },
+        },
+      });
+      expect(result.ok).toBe(false);
+    });
+
+    it("allows real values inside a sensitive object", () => {
+      const result = rejectPlaceholderSecrets({
+        channels: {
+          googlechat: {
+            serviceAccount: {
+              type: "service_account",
+              project_id: "my-project",
+              private_key: "-----BEGIN RSA PRIVATE KEY-----\nreal-key-data\n-----END RSA PRIVATE KEY-----",
+            },
+          },
+        },
+      });
+      expect(result.ok).toBe(true);
+    });
+
+    it("rejects placeholder in serviceAccountRef nested values", () => {
+      const result = rejectPlaceholderSecrets({
+        channels: {
+          googlechat: {
+            serviceAccountRef: {
+              credential: "CHANGEME",
+            },
+          },
+        },
+      });
+      expect(result.ok).toBe(false);
+    });
+
+    it("propagates sensitivity via hint-marked sensitive objects", () => {
+      const hints: ConfigUiHints = {
+        "custom.credentials": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        {
+          custom: {
+            credentials: {
+              username: "admin",
+              password: "FIXME",
+            },
+          },
+        },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+      expect(result.humanReadableMessage).toContain("password");
+    });
+  });
+
+  describe("P1: apply ConfigUiHints when scanning arrays", () => {
+    it("rejects placeholder in array marked sensitive by hints", () => {
+      const hints: ConfigUiHints = {
+        "custom.secretList[]": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        { custom: { secretList: ["REDACTED"] } },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it("allows real values in array marked sensitive by hints", () => {
+      const hints: ConfigUiHints = {
+        "custom.secretList[]": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        { custom: { secretList: ["real-secret-value-123"] } },
+        hints,
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it("rejects placeholder in array where parent path hint is sensitive", () => {
+      const hints: ConfigUiHints = {
+        "custom.secretList": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        { custom: { secretList: ["CHANGEME"] } },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+    });
+  });
+
+  describe("P1: match wildcard-sensitive hints for intermediate record keys", () => {
+    it("rejects placeholder at plugins.entries.*.apiKey via wildcard hint", () => {
+      const hints: ConfigUiHints = {
+        "plugins.entries.*.apiKey": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        {
+          plugins: {
+            entries: {
+              "voice-call": { apiKey: "REDACTED" },
+            },
+          },
+        },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+      expect(result.humanReadableMessage).toContain("apiKey");
+    });
+
+    it("allows real values at wildcard-sensitive hint paths", () => {
+      const hints: ConfigUiHints = {
+        "plugins.entries.*.apiKey": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        {
+          plugins: {
+            entries: {
+              "voice-call": { apiKey: "sk-proj-real-key-abc123" },
+            },
+          },
+        },
+        hints,
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it("rejects placeholder at skills.entries.*.apiKey via wildcard hint", () => {
+      const hints: ConfigUiHints = {
+        "skills.entries.*.apiKey": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        {
+          skills: {
+            entries: {
+              "my-skill": { apiKey: "your-api-key" },
+            },
+          },
+        },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it("rejects placeholder at deeply nested wildcard path", () => {
+      const hints: ConfigUiHints = {
+        "plugins.entries.*.config.twilio.authToken": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        {
+          plugins: {
+            entries: {
+              "voice-call": {
+                config: { twilio: { authToken: "REPLACE_ME" } },
+              },
+            },
+          },
+        },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+      expect(result.humanReadableMessage).toContain("authToken");
+    });
+  });
+
+  describe("P2: sensitive:false hints override parent and pattern sensitivity", () => {
+    it("allows placeholder at path marked sensitive:false even if pattern matches", () => {
+      const hints: ConfigUiHints = {
+        "channels.slack.botToken": { sensitive: false },
+      };
+      const result = rejectPlaceholderSecrets(
+        { channels: { slack: { botToken: "REDACTED" } } },
+        hints,
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it("allows placeholder at path marked sensitive:false via wildcard hint", () => {
+      const hints: ConfigUiHints = {
+        "custom.*.token": { sensitive: false },
+      };
+      const result = rejectPlaceholderSecrets(
+        { custom: { myService: { token: "REDACTED" } } },
+        hints,
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it("sensitive:false overrides parent sensitivity propagation", () => {
+      const hints: ConfigUiHints = {
+        "channels.googlechat.serviceAccount": { sensitive: true },
+        "channels.googlechat.serviceAccount.type": { sensitive: false },
+      };
+      // type is explicitly non-sensitive even though parent is sensitive
+      const result = rejectPlaceholderSecrets(
+        {
+          channels: {
+            googlechat: {
+              serviceAccount: {
+                type: "CHANGEME",
+                private_key: "real-key-value",
+              },
+            },
+          },
+        },
+        hints,
+      );
+      expect(result.ok).toBe(true);
+    });
+  });
 });
 
 describe("realredactConfigSnapshot_real", () => {
