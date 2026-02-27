@@ -325,6 +325,54 @@ describe("buildGatewayConnectionDetails", () => {
 
     expect(details.url).toBe("ws://127.0.0.1:18789");
   });
+
+  it("uses OPENCLAW_GATEWAY_URL env var when set", () => {
+    setLocalLoopbackGatewayConfig();
+
+    const details = buildGatewayConnectionDetails({
+      env: { OPENCLAW_GATEWAY_URL: "ws://openclaw-gateway:18789" },
+    });
+
+    expect(details.url).toBe("ws://openclaw-gateway:18789");
+    expect(details.urlSource).toBe("env OPENCLAW_GATEWAY_URL");
+    expect(details.bindDetail).toBeUndefined();
+    expect(details.allowPlaintextWs).toBe(true);
+  });
+
+  it("allows plaintext ws:// when OPENCLAW_GATEWAY_URL is set (Docker networking)", () => {
+    setLocalLoopbackGatewayConfig();
+
+    // Should NOT throw even though the URL is ws:// to a non-loopback host
+    const details = buildGatewayConnectionDetails({
+      env: { OPENCLAW_GATEWAY_URL: "ws://openclaw-gateway:18789" },
+    });
+
+    expect(details.url).toBe("ws://openclaw-gateway:18789");
+    expect(details.allowPlaintextWs).toBe(true);
+  });
+
+  it("prefers cli --url over OPENCLAW_GATEWAY_URL env var", () => {
+    setLocalLoopbackGatewayConfig();
+
+    const details = buildGatewayConnectionDetails({
+      url: "wss://explicit-override.example/ws",
+      env: { OPENCLAW_GATEWAY_URL: "ws://openclaw-gateway:18789" },
+    });
+
+    expect(details.url).toBe("wss://explicit-override.example/ws");
+    expect(details.urlSource).toBe("cli --url");
+  });
+
+  it("ignores empty OPENCLAW_GATEWAY_URL", () => {
+    setLocalLoopbackGatewayConfig();
+
+    const details = buildGatewayConnectionDetails({
+      env: { OPENCLAW_GATEWAY_URL: "  " },
+    });
+
+    expect(details.url).toBe("ws://127.0.0.1:18789");
+    expect(details.urlSource).toBe("local loopback");
+  });
 });
 
 describe("callGateway error details", () => {

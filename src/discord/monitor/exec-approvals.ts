@@ -401,13 +401,14 @@ export class DiscordExecApprovalHandler {
 
     logDebug("discord exec approvals: starting handler");
 
-    const { url: gatewayUrl } = buildGatewayConnectionDetails({
+    const gatewayConnection = buildGatewayConnectionDetails({
       config: this.opts.cfg,
       url: this.opts.gatewayUrl,
     });
 
     this.gatewayClient = new GatewayClient({
-      url: gatewayUrl,
+      url: gatewayConnection.url,
+      allowPlaintextWs: gatewayConnection.allowPlaintextWs,
       clientName: GATEWAY_CLIENT_NAMES.GATEWAY_CLIENT,
       clientDisplayName: "Discord Exec Approvals",
       mode: GATEWAY_CLIENT_MODES.BACKEND,

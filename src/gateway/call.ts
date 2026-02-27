@@ -66,6 +66,8 @@ export type GatewayConnectionDetails = {
   urlSource: string;
   bindDetail?: string;
   remoteFallbackNote?: string;
+  /** True when the URL was set via OPENCLAW_GATEWAY_URL (explicit user opt-in for container networking). */
+  allowPlaintextWs?: boolean;
   message: string;
 };
 
@@ -107,8 +109,14 @@ export function ensureExplicitGatewayAuth(params: {
 }
 
 export function buildGatewayConnectionDetails(
-  options: { config?: OpenClawConfig; url?: string; configPath?: string } = {},
+  options: {
+    config?: OpenClawConfig;
+    url?: string;
+    configPath?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
 ): GatewayConnectionDetails {
+  const env = options.env ?? process.env;
   const config = options.config ?? loadConfig();
   const configPath =
     options.configPath ?? resolveConfigPath(process.env, resolveStateDir(process.env));
@@ -124,26 +132,36 @@ export function buildGatewayConnectionDetails(
     typeof options.url === "string" && options.url.trim().length > 0
       ? options.url.trim()
       : undefined;
+  // OPENCLAW_GATEWAY_URL env var: explicit user override for containerized setups (e.g. Docker
+  // Compose) where the default loopback address does not reach the gateway container.
+  const envUrlRaw = env.OPENCLAW_GATEWAY_URL?.trim();
+  const envUrl = envUrlRaw && envUrlRaw.length > 0 ? envUrlRaw : undefined;
   const remoteUrl =
     typeof remote?.url === "string" && remote.url.trim().length > 0 ? remote.url.trim() : undefined;
-  const remoteMisconfigured = isRemoteMode && !urlOverride && !remoteUrl;
-  const url = urlOverride || remoteUrl || localUrl;
+  const remoteMisconfigured = isRemoteMode && !urlOverride && !envUrl && !remoteUrl;
+  const url = urlOverride || envUrl || remoteUrl || localUrl;
   const urlSource = urlOverride
     ? "cli --url"
-    : remoteUrl
-      ? "config gateway.remote.url"
-      : remoteMisconfigured
-        ? "missing gateway.remote.url (fallback local)"
-        : "local loopback";
+    : envUrl
+      ? "env OPENCLAW_GATEWAY_URL"
+      : remoteUrl
+        ? "config gateway.remote.url"
+        : remoteMisconfigured
+          ? "missing gateway.remote.url (fallback local)"
+          : "local loopback";
   const remoteFallbackNote = remoteMisconfigured
     ? "Warn: gateway.mode=remote but gateway.remote.url is missing; set gateway.remote.url or switch gateway.mode=local."
     : undefined;
-  const bindDetail = !urlOverride && !remoteUrl ? `Bind: ${bindMode}` : undefined;
+  const bindDetail = !urlOverride && !envUrl && !remoteUrl ? `Bind: ${bindMode}` : undefined;
+  // When the URL comes from OPENCLAW_GATEWAY_URL, the user explicitly opted in to that target
+  // (e.g. Docker Compose internal DNS). Skip the plaintext ws:// security check for this source
+  // since container-internal networks are not susceptible to the same MITM risks as public links.
+  const allowPlaintextWs = Boolean(envUrl) && url === envUrl;
 
   // Security check: block ALL insecure ws:// to non-loopback addresses (CWE-319, CVSS 9.8)
   // This applies to the FINAL resolved URL, regardless of source (config, CLI override, etc).
   // Both credentials and chat/conversation data must not be transmitted over plaintext to remote hosts.
-  if (!isSecureWebSocketUrl(url)) {
+  if (!allowPlaintextWs && !isSecureWebSocketUrl(url)) {
     throw new Error(
       [
         `SECURITY ERROR: Gateway URL "${url}" uses plaintext ws:// to a non-loopback address.`,
@@ -154,6 +172,7 @@ export function buildGatewayConnectionDetails(
         "Safe remote access defaults:",
         "- keep gateway.bind=loopback and use an SSH tunnel (ssh -N -L 18789:127.0.0.1:18789 user@gateway-host)",
         "- or use Tailscale Serve/Funnel for HTTPS remote access",
+        "- or set OPENCLAW_GATEWAY_URL for Docker Compose internal networking",
         "Doctor: openclaw doctor --fix",
         "Docs: https://docs.openclaw.ai/gateway/remote",
       ].join("\n"),
@@ -175,6 +194,7 @@ export function buildGatewayConnectionDetails(
     urlSource,
     bindDetail,
     remoteFallbackNote,
+    allowPlaintextWs,
     message,
   };
 }
@@ -306,6 +326,7 @@ async function executeGatewayRequestWithScopes<T>(params: {
   token?: string;
   password?: string;
   tlsFingerprint?: string;
+  allowPlaintextWs?: boolean;
   timeoutMs: number;
   safeTimerTimeoutMs: number;
   connectionDetails: GatewayConnectionDetails;
@@ -333,6 +354,7 @@ async function executeGatewayRequestWithScopes<T>(params: {
       token,
       password,
       tlsFingerprint,
+      allowPlaintextWs: params.allowPlaintextWs,
       instanceId: opts.instanceId ?? randomUUID(),
       clientName: opts.clientName ?? GATEWAY_CLIENT_NAMES.CLI,
       clientDisplayName: opts.clientDisplayName,
@@ -406,6 +428,7 @@ async function callGatewayWithScopes<T = Record<string, unknown>>(
     token,
     password,
     tlsFingerprint,
+    allowPlaintextWs: connectionDetails.allowPlaintextWs,
     timeoutMs,
     safeTimerTimeoutMs,
     connectionDetails,

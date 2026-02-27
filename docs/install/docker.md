@@ -587,6 +587,17 @@ Example:
 
 ## Troubleshooting
 
+- **CLI cannot reach gateway (1006 abnormal closure)**: Inside Docker Compose,
+  `127.0.0.1` refers to the container's own loopback, not the gateway container.
+  The `docker-compose.yml` sets `OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789`
+  on the CLI service so it uses the Docker Compose service name to reach the
+  gateway. If you use a custom compose file, add this environment variable to your
+  CLI service, or pass it at runtime:
+
+  ```bash
+  docker compose run --rm -e OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789 openclaw-cli devices approve <id>
+  ```
+
 - Image missing: build with [`scripts/sandbox-setup.sh`](https://github.com/openclaw/openclaw/blob/main/scripts/sandbox-setup.sh) or set `agents.defaults.sandbox.docker.image`.
 - Container not running: it will auto-create per session on demand.
 - Permission errors in sandbox: set `docker.user` to a UID:GID that matches your

@@ -64,6 +64,8 @@ export type GatewayClientOptions = {
   minProtocol?: number;
   maxProtocol?: number;
   tlsFingerprint?: string;
+  /** Skip plaintext ws:// security check (e.g. Docker Compose internal networking via OPENCLAW_GATEWAY_URL). */
+  allowPlaintextWs?: boolean;
   onEvent?: (evt: EventFrame) => void;
   onHelloOk?: (hello: HelloOk) => void;
   onConnectError?: (err: Error) => void;
@@ -117,7 +119,8 @@ export class GatewayClient {
     // Security check: block ALL plaintext ws:// to non-loopback addresses (CWE-319, CVSS 9.8)
     // This protects both credentials AND chat/conversation data from MITM attacks.
     // Device tokens may be loaded later in sendConnect(), so we block regardless of hasCredentials.
-    if (!isSecureWebSocketUrl(url)) {
+    // Skip when allowPlaintextWs is set (explicit user opt-in, e.g. Docker Compose internal networking).
+    if (!this.opts.allowPlaintextWs && !isSecureWebSocketUrl(url)) {
       // Safe hostname extraction - avoid throwing on malformed URLs in error path
       let displayHost = url;
       try {

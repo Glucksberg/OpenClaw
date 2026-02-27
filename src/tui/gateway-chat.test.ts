@@ -56,7 +56,7 @@ describe("resolveGatewayConnection", () => {
       ...auth,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       url: "wss://override.example/ws",
       ...expected,
     });

@@ -124,6 +124,7 @@ export class GatewayChatClient {
       url: resolved.url,
       token: resolved.token,
       password: resolved.password,
+      allowPlaintextWs: resolved.allowPlaintextWs,
       clientName: GATEWAY_CLIENT_NAMES.GATEWAY_CLIENT,
       clientDisplayName: "openclaw-tui",
       clientVersion: VERSION,
@@ -248,10 +249,12 @@ export function resolveGatewayConnection(opts: GatewayConnectionOptions) {
     auth: explicitAuth,
     errorHint: "Fix: pass --token or --password when using --url.",
   });
-  const url = buildGatewayConnectionDetails({
+  const connectionDetails = buildGatewayConnectionDetails({
     config,
     ...(urlOverride ? { url: urlOverride } : {}),
-  }).url;
+  });
+  const url = connectionDetails.url;
+  const allowPlaintextWs = connectionDetails.allowPlaintextWs;
 
   const token =
     explicitAuth.token ||
@@ -275,5 +278,5 @@ export function resolveGatewayConnection(opts: GatewayConnectionOptions) {
           : undefined)
       : undefined);
 
-  return { url, token, password };
+  return { url, token, password, allowPlaintextWs };
 }

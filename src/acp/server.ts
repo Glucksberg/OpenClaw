@@ -59,6 +59,7 @@ export async function serveAcpGateway(opts: AcpServerOptions = {}): Promise<void
     url: connection.url,
     token: creds.token,
     password: creds.password,
+    allowPlaintextWs: connection.allowPlaintextWs,
     clientName: GATEWAY_CLIENT_NAMES.CLI,
     clientDisplayName: "ACP",
     clientVersion: "acp",
