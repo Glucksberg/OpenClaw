@@ -18,7 +18,7 @@ Already followed [Getting Started](/start/getting-started)? You're all set — t
 - `pnpm` only if you build from source
 
 <Note>
-On Windows, we strongly recommend running OpenClaw under [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install).
+On Windows, OpenClaw runs natively (Node.js + PowerShell) or under [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install). See the [Windows platform page](/platforms/windows) for both paths.
 </Note>
 
 ## Install methods

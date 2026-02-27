@@ -13,7 +13,7 @@ Bun is not recommended for the Gateway (WhatsApp/Telegram bugs).
 
 Companion apps exist for macOS (menu bar app) and mobile nodes (iOS/Android). Windows and
 Linux companion apps are planned, but the Gateway is fully supported today.
-Native companion apps for Windows are also planned; the Gateway is recommended via WSL2.
+On Windows, the Gateway runs natively (Node.js + PowerShell) or via WSL2.
 
 ## Choose your OS
 
