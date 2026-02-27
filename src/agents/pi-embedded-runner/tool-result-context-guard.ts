@@ -288,6 +288,12 @@ function truncateTrailingToolResultsToFitBudget(params: {
   }
   trailing.sort((a, b) => b.chars - a.chars);
 
+  // The weight ratio converts estimated (weighted) chars to raw text chars.
+  // estimateMessageChars inflates tool-result text by CHARS_PER_TOKEN_ESTIMATE /
+  // TOOL_RESULT_CHARS_PER_TOKEN_ESTIMATE, so we reverse that when computing the
+  // raw-char truncation target for truncateToolResultToChars.
+  const weightToRawRatio = TOOL_RESULT_CHARS_PER_TOKEN_ESTIMATE / CHARS_PER_TOKEN_ESTIMATE;
+
   for (const entry of trailing) {
     const currentChars = estimateContextChars(messages);
     if (currentChars <= contextBudgetChars) {
@@ -296,12 +302,13 @@ function truncateTrailingToolResultsToFitBudget(params: {
 
     const overflow = currentChars - contextBudgetChars;
     const msg = messages[entry.index];
-    const msgChars = estimateMessageChars(msg);
-    // Shrink this result to fit: its new budget is its current size minus the overflow,
-    // but keep at least enough room for the truncation notice.
+    const rawTextLength = getToolResultText(msg).length;
+    // Convert the weighted overflow to raw chars, then compute the raw-char budget.
+    // truncateToolResultToChars operates on raw text length, so the target must match.
+    const rawOverflow = Math.ceil(overflow * weightToRawRatio);
     const targetChars = Math.max(
       CONTEXT_LIMIT_TRUNCATION_NOTICE.length * 2,
-      msgChars - overflow,
+      rawTextLength - rawOverflow,
     );
 
     const truncated = truncateToolResultToChars(msg, targetChars);
