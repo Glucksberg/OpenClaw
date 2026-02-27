@@ -1,15 +1,18 @@
 export function buildControlUiCspHeader(): string {
   // Control UI: block framing, block inline scripts, keep styles permissive
   // (UI uses a lot of inline style attributes in templates).
+  // Google Fonts (fonts.googleapis.com for stylesheets, fonts.gstatic.com for
+  // font files) are allowed because the Control UI loads Space Grotesk and
+  // JetBrains Mono from the Google Fonts CDN.
   return [
     "default-src 'self'",
     "base-uri 'none'",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
-    "font-src 'self'",
+    "font-src 'self' https://fonts.gstatic.com",
     "connect-src 'self' ws: wss:",
   ].join("; ");
 }
