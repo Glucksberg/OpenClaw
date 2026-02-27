@@ -46,7 +46,7 @@ import {
 } from "./agent-runner-reminder-guard.js";
 import { appendUsageLine, formatResponseUsageLine } from "./agent-runner-utils.js";
 import { createAudioAsVoiceBuffer, createBlockReplyPipeline } from "./block-reply-pipeline.js";
-import { resolveBlockStreamingCoalescing } from "./block-streaming.js";
+import { resolveEffectiveBlockStreamingConfig } from "./block-streaming.js";
 import { checkFallbackNotification } from "./fallback-notify.js";
 import { createFollowupRunner } from "./followup-runner.js";
 import { resolveOriginMessageProvider, resolveOriginMessageTo } from "./origin-routing.js";
