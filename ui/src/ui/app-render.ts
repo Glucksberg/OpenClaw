@@ -826,6 +826,12 @@ export function renderApp(state: AppViewState) {
                       )
                     : -1;
                   const isListEntry = index >= 0;
+                  // Only fall through to defaults for the actual default agent;
+                  // unknown non-default agents are a no-op to avoid overwriting globals.
+                  const defaultId = state.agentsList?.defaultId ?? null;
+                  if (!isListEntry && agentId !== defaultId) {
+                    return;
+                  }
                   const basePath = isListEntry
                     ? ["agents", "list", index, "model"]
                     : ["agents", "defaults", "model"];
@@ -865,11 +871,17 @@ export function renderApp(state: AppViewState) {
                       )
                     : -1;
                   const isListEntry = index >= 0;
+                  // Only fall through to defaults for the actual default agent;
+                  // unknown non-default agents are a no-op to avoid overwriting globals.
+                  const defaultId = state.agentsList?.defaultId ?? null;
+                  if (!isListEntry && agentId !== defaultId) {
+                    return;
+                  }
                   const basePath = isListEntry
                     ? ["agents", "list", index, "model"]
                     : ["agents", "defaults", "model"];
                   const existing = isListEntry
-                    ? (list![index] as { model?: unknown }).model
+                    ? (list![index] as { model?: unknown })?.model
                     : cfgTyped.agents?.defaults?.model;
                   const normalized = fallbacks.map((name) => name.trim()).filter(Boolean);
                   const resolvePrimary = () => {
