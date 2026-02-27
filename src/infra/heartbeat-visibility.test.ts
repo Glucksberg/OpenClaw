@@ -41,10 +41,28 @@ describe("resolveHeartbeatVisibility", () => {
     const result = resolveHeartbeatVisibility({ cfg, channel: "telegram" });
 
     expect(result).toEqual({
-      showOk: false,
+      showOk: true,
       showAlerts: true,
       useIndicator: true,
     });
+  });
+
+  it("telegram defaults showOk to true (built-in channel default)", () => {
+    const cfg = {} as OpenClawConfig;
+    const result = resolveHeartbeatVisibility({ cfg, channel: "telegram" });
+    expect(result.showOk).toBe(true);
+  });
+
+  it("non-telegram channels default showOk to false", () => {
+    const cfg = {} as OpenClawConfig;
+    const result = resolveHeartbeatVisibility({ cfg, channel: "discord" });
+    expect(result.showOk).toBe(false);
+  });
+
+  it("config channel defaults override telegram built-in default", () => {
+    const cfg = createChannelDefaultsHeartbeatConfig({ showOk: false });
+    const result = resolveHeartbeatVisibility({ cfg, channel: "telegram" });
+    expect(result.showOk).toBe(false);
   });
 
   it("uses channel defaults when provided", () => {

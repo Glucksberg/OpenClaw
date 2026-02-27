@@ -14,6 +14,13 @@ const DEFAULT_VISIBILITY: ResolvedHeartbeatVisibility = {
   useIndicator: true, // Emit indicator events
 };
 
+/** Per-channel built-in defaults that override DEFAULT_VISIBILITY. */
+const CHANNEL_VISIBILITY_DEFAULTS: Partial<
+  Record<GatewayMessageChannel, Partial<ResolvedHeartbeatVisibility>>
+> = {
+  telegram: { showOk: true }, // Telegram users expect visual heartbeat feedback
+};
+
 /**
  * Resolve heartbeat visibility settings for a channel.
  * Supports both deliverable channels (telegram, signal, etc.) and webchat.
@@ -52,22 +59,28 @@ export function resolveHeartbeatVisibility(params: {
   const accountCfg = accountId ? channelCfg?.accounts?.[accountId] : undefined;
   const perAccount = accountCfg?.heartbeat;
 
-  // Precedence: per-account > per-channel > channel-defaults > global defaults
+  // Built-in per-channel defaults (between config defaults and global defaults)
+  const builtinChannelDefaults = CHANNEL_VISIBILITY_DEFAULTS[channel];
+
+  // Precedence: per-account > per-channel > channel-defaults > built-in channel defaults > global defaults
   return {
     showOk:
       perAccount?.showOk ??
       perChannel?.showOk ??
       channelDefaults?.showOk ??
+      builtinChannelDefaults?.showOk ??
       DEFAULT_VISIBILITY.showOk,
     showAlerts:
       perAccount?.showAlerts ??
       perChannel?.showAlerts ??
       channelDefaults?.showAlerts ??
+      builtinChannelDefaults?.showAlerts ??
       DEFAULT_VISIBILITY.showAlerts,
     useIndicator:
       perAccount?.useIndicator ??
       perChannel?.useIndicator ??
       channelDefaults?.useIndicator ??
+      builtinChannelDefaults?.useIndicator ??
       DEFAULT_VISIBILITY.useIndicator,
   };
 }
