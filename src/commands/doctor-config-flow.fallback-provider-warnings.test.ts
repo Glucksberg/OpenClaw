@@ -169,6 +169,42 @@ describe("collectFallbackProviderWarnings", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("does not warn for implicit providers (resolved via env/credentials at runtime)", () => {
+    // These providers are discovered by resolveImplicitProviders and should
+    // not trigger false "undefined provider" warnings.
+    const implicitProviderRefs = [
+      "moonshot/moonshot-v1-128k",
+      "qwen-portal/qwen-max",
+      "volcengine/doubao-pro-32k",
+      "byteplus/doubao-pro-32k",
+      "venice/llama-3.3-70b",
+      "ollama/llama3",
+      "vllm/my-model",
+      "together/meta-llama/Llama-3-70b",
+      "nvidia/meta/llama-3.1-70b-instruct",
+      "kilocode/my-model",
+      "qianfan/ernie-4.0-8k",
+      "synthetic/synth-1",
+      "xiaomi/miai-model",
+      "minimax-portal/abab6-chat",
+      "cloudflare-ai-gateway/my-model",
+      "volcengine-plan/doubao-pro-32k",
+      "byteplus-plan/doubao-pro-32k",
+    ];
+    const warnings = collectFallbackProviderWarnings({
+      agents: {
+        defaults: {
+          model: {
+            primary: "anthropic/claude-opus-4-6",
+            fallbacks: implicitProviderRefs,
+          },
+        },
+      },
+    });
+
+    expect(warnings).toEqual([]);
+  });
+
   it("handles empty or missing fallback arrays gracefully", () => {
     const warnings = collectFallbackProviderWarnings({
       agents: {

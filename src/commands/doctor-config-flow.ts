@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ZodIssue } from "zod";
 import { normalizeProviderId, parseModelRef } from "../agents/model-selection.js";
+import { IMPLICIT_PROVIDER_IDS } from "../agents/models-config.providers.js";
 import { normalizeChatChannelId } from "../channels/registry.js";
 import {
   isNumericTelegramUserId,
@@ -1775,7 +1776,10 @@ export function collectFallbackProviderWarnings(cfg: OpenClawConfig): FallbackPr
   const cliBackends = cfg.agents?.defaults?.cliBackends;
 
   // Build the set of known provider ids (normalized).
-  const definedProviderIds = new Set(PI_BUILTIN_PROVIDERS);
+  // Include built-in providers and implicit providers (those discovered at
+  // runtime via env/credentials in resolveImplicitProviders) so that valid
+  // fallback refs for implicitly available providers don't trigger false warnings.
+  const definedProviderIds = new Set([...PI_BUILTIN_PROVIDERS, ...IMPLICIT_PROVIDER_IDS]);
   if (explicitProviders) {
     for (const key of Object.keys(explicitProviders)) {
       definedProviderIds.add(normalizeProviderId(key));

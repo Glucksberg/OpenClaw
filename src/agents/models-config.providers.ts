@@ -920,6 +920,31 @@ export function buildKilocodeProvider(): ProviderConfig {
   };
 }
 
+/**
+ * All provider IDs that {@link resolveImplicitProviders} may produce at runtime
+ * when matching credentials/env vars are present. Used by doctor validation to
+ * avoid false "undefined provider" warnings for implicit providers.
+ */
+export const IMPLICIT_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  "byteplus",
+  "byteplus-plan",
+  "cloudflare-ai-gateway",
+  "kilocode",
+  "minimax-portal",
+  "moonshot",
+  "nvidia",
+  "ollama",
+  "qianfan",
+  "qwen-portal",
+  "synthetic",
+  "together",
+  "venice",
+  "vllm",
+  "volcengine",
+  "volcengine-plan",
+  "xiaomi",
+]);
+
 export async function resolveImplicitProviders(params: {
   agentDir: string;
   explicitProviders?: Record<string, ProviderConfig> | null;
