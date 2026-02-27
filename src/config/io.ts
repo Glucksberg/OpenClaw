@@ -45,6 +45,7 @@ import { normalizeExecSafeBinProfilesInConfig } from "./normalize-exec-safe-bin.
 import { normalizeConfigPaths } from "./normalize-paths.js";
 import { resolveConfigPath, resolveDefaultConfigCandidates, resolveStateDir } from "./paths.js";
 import { isBlockedObjectKey } from "./prototype-keys.js";
+import { REDACTED_SENTINEL } from "./redact-snapshot.js";
 import { applyConfigOverrides } from "./runtime-overrides.js";
 import type { OpenClawConfig, ConfigFileSnapshot, LegacyConfigIssue } from "./types.js";
 import {
@@ -1130,6 +1131,17 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
     // explicitly set values. Runtime defaults are applied when loading (issue #6070).
     const stampedOutputConfig = stampConfigVersion(outputConfig);
     const json = JSON.stringify(stampedOutputConfig, null, 2).trimEnd().concat("\n");
+    // Guard: abort the write if the serialized JSON still contains the redaction
+    // sentinel. This prevents crash loops or misconfigured restore paths from
+    // persisting placeholder strings as real credentials (issue #23264).
+    if (json.includes(REDACTED_SENTINEL)) {
+      deps.logger.error(
+        `Refusing to write config: output contains redaction sentinel "${REDACTED_SENTINEL}" — this would corrupt stored secrets`,
+      );
+      throw new Error(
+        `Config write aborted: output contains redaction sentinel "${REDACTED_SENTINEL}"`,
+      );
+    }
     const nextHash = hashConfigRaw(json);
     const previousHash = resolveConfigSnapshotHash(snapshot);
     const changedPathCount = changedPaths?.size;

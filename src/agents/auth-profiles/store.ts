@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type { OAuthCredentials } from "@mariozechner/pi-ai";
 import { resolveOAuthPath } from "../../config/paths.js";
+import { REDACTED_SENTINEL } from "../../config/redact-snapshot.js";
 import { withFileLock } from "../../infra/file-lock.js";
 import { loadJsonFile, saveJsonFile } from "../../infra/json-file.js";
 import { AUTH_STORE_LOCK_OPTIONS, AUTH_STORE_VERSION, log } from "./constants.js";
@@ -9,8 +10,21 @@ import { ensureAuthStoreFile, resolveAuthStorePath, resolveLegacyAuthStorePath }
 import type { AuthProfileCredential, AuthProfileStore, ProfileUsageStats } from "./types.js";
 
 type LegacyAuthStore = Record<string, AuthProfileCredential>;
-type CredentialRejectReason = "non_object" | "invalid_type" | "missing_provider";
+type CredentialRejectReason = "non_object" | "invalid_type" | "missing_provider" | "sentinel_value";
 type RejectedCredentialEntry = { key: string; reason: CredentialRejectReason };
+
+/**
+ * Guard: returns true when a value looks like a redaction sentinel or placeholder
+ * rather than a real credential. This prevents crash/migration code paths from
+ * accidentally overwriting valid Keychain/env-backed secrets with the redacted
+ * placeholder string (see issue #23264).
+ */
+function isRedactedOrPlaceholder(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+  return value === REDACTED_SENTINEL;
+}
 type LoadAuthProfileStoreOptions = {
   allowKeychainPrompt?: boolean;
   readOnly?: boolean;
@@ -134,6 +148,14 @@ function parseCredentialEntry(
   const provider = typed.provider ?? fallbackProvider;
   if (typeof provider !== "string" || provider.trim().length === 0) {
     return { ok: false, reason: "missing_provider" };
+  }
+  // Guard: reject entries whose secret value is actually the redaction sentinel.
+  // This prevents a corrupted on-disk store from poisoning the runtime (issue #23264).
+  if (typed.type === "api_key" && isRedactedOrPlaceholder(typed.key)) {
+    return { ok: false, reason: "sentinel_value" };
+  }
+  if (typed.type === "token" && isRedactedOrPlaceholder(typed.token)) {
+    return { ok: false, reason: "sentinel_value" };
   }
   return {
     ok: true,
@@ -491,6 +513,21 @@ export function saveAuthProfileStore(store: AuthProfileStore, agentDir?: string)
         return [profileId, sanitized];
       }
       if (credential.type === "token" && credential.tokenRef && credential.token !== undefined) {
+        const sanitized = { ...credential } as Record<string, unknown>;
+        delete sanitized.token;
+        return [profileId, sanitized];
+      }
+      // Guard: never persist a redaction sentinel as an actual credential value.
+      // During crash loops or config migrations, the redacted placeholder can leak
+      // into the auth store if the config was read from a redacted snapshot.
+      if (credential.type === "api_key" && isRedactedOrPlaceholder(credential.key)) {
+        log.warn("refused to persist redacted sentinel as api_key credential", { profileId });
+        const sanitized = { ...credential } as Record<string, unknown>;
+        delete sanitized.key;
+        return [profileId, sanitized];
+      }
+      if (credential.type === "token" && isRedactedOrPlaceholder(credential.token)) {
+        log.warn("refused to persist redacted sentinel as token credential", { profileId });
         const sanitized = { ...credential } as Record<string, unknown>;
         delete sanitized.token;
         return [profileId, sanitized];
