@@ -257,7 +257,12 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
     defaultRuntime.exit(1);
     return;
   }
-  const bindRaw = toOptionString(opts.bind) ?? cfg.gateway?.bind ?? "loopback";
+  // Track whether --bind was explicitly provided on the CLI.  When it was not,
+  // in-process restarts re-read the bind mode from the (possibly updated) config
+  // so that `openclaw config set gateway.bind lan` takes effect without a full
+  // process restart (fixes #22830).
+  const cliBindRaw = toOptionString(opts.bind);
+  const bindRaw = cliBindRaw ?? cfg.gateway?.bind ?? "loopback";
   const bind =
     bindRaw === "loopback" ||
     bindRaw === "lan" ||
@@ -352,12 +357,17 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
     await runGatewayLoop({
       runtime: defaultRuntime,
       lockPort: port,
-      start: async () =>
-        await startGatewayServer(port, {
-          bind,
+      start: async () => {
+        // When --bind was not passed on the CLI, re-read the bind mode from the
+        // current config on each restart iteration so config changes take effect
+        // during in-process restarts (SIGUSR1 / OPENCLAW_NO_RESPAWN).
+        const effectiveBind = cliBindRaw ? bind : (loadConfig().gateway?.bind ?? "loopback");
+        return await startGatewayServer(port, {
+          bind: effectiveBind,
           auth: authOverride,
           tailscale: tailscaleOverride,
-        }),
+        });
+      },
     });
   } catch (err) {
     if (

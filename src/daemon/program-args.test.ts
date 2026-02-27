@@ -65,6 +65,77 @@ describe("resolveGatewayProgramArguments", () => {
     expect(result.programArguments[1]).not.toContain("@2026.1.21-2");
   });
 
+  it("includes --bind in program arguments when bind mode is not loopback", async () => {
+    const argv1 = path.resolve("/tmp/.npm/_npx/63c3/node_modules/.bin/openclaw");
+    const entryPath = path.resolve("/tmp/.npm/_npx/63c3/node_modules/openclaw/dist/entry.js");
+    process.argv = ["node", argv1];
+    fsMocks.realpath.mockResolvedValue(entryPath);
+    fsMocks.access.mockImplementation(async (target: string) => {
+      if (target === entryPath) {
+        return;
+      }
+      throw new Error("missing");
+    });
+
+    const result = await resolveGatewayProgramArguments({ port: 18789, bind: "lan" });
+
+    expect(result.programArguments).toEqual([
+      process.execPath,
+      entryPath,
+      "gateway",
+      "--port",
+      "18789",
+      "--bind",
+      "lan",
+    ]);
+  });
+
+  it("omits --bind from program arguments when bind mode is loopback", async () => {
+    const argv1 = path.resolve("/tmp/.npm/_npx/63c3/node_modules/.bin/openclaw");
+    const entryPath = path.resolve("/tmp/.npm/_npx/63c3/node_modules/openclaw/dist/entry.js");
+    process.argv = ["node", argv1];
+    fsMocks.realpath.mockResolvedValue(entryPath);
+    fsMocks.access.mockImplementation(async (target: string) => {
+      if (target === entryPath) {
+        return;
+      }
+      throw new Error("missing");
+    });
+
+    const result = await resolveGatewayProgramArguments({ port: 18789, bind: "loopback" });
+
+    expect(result.programArguments).toEqual([
+      process.execPath,
+      entryPath,
+      "gateway",
+      "--port",
+      "18789",
+    ]);
+  });
+
+  it("omits --bind from program arguments when bind is undefined", async () => {
+    const argv1 = path.resolve("/tmp/.npm/_npx/63c3/node_modules/.bin/openclaw");
+    const entryPath = path.resolve("/tmp/.npm/_npx/63c3/node_modules/openclaw/dist/entry.js");
+    process.argv = ["node", argv1];
+    fsMocks.realpath.mockResolvedValue(entryPath);
+    fsMocks.access.mockImplementation(async (target: string) => {
+      if (target === entryPath) {
+        return;
+      }
+      throw new Error("missing");
+    });
+
+    const result = await resolveGatewayProgramArguments({ port: 18789 });
+
+    expect(result.programArguments).toEqual([
+      process.execPath,
+      entryPath,
+      "gateway",
+      "--port",
+      "18789",
+    ]);
+  });
+
   it("falls back to node_modules package dist when .bin path is not resolved", async () => {
     const argv1 = path.resolve("/tmp/.npm/_npx/63c3/node_modules/.bin/openclaw");
     const indexPath = path.resolve("/tmp/.npm/_npx/63c3/node_modules/openclaw/dist/index.js");

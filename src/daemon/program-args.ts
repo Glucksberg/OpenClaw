@@ -232,11 +232,17 @@ async function resolveCliProgramArguments(params: {
 
 export async function resolveGatewayProgramArguments(params: {
   port: number;
+  bind?: string;
   dev?: boolean;
   runtime?: GatewayRuntimePreference;
   nodePath?: string;
 }): Promise<GatewayProgramArgs> {
   const gatewayArgs = ["gateway", "--port", String(params.port)];
+  // Persist bind mode in the service command so restarts respect the
+  // configured value instead of silently falling back to "loopback".
+  if (params.bind && params.bind !== "loopback") {
+    gatewayArgs.push("--bind", params.bind);
+  }
   return resolveCliProgramArguments({
     args: gatewayArgs,
     dev: params.dev,
