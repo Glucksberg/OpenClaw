@@ -1,4 +1,4 @@
-import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { isAgentAllowedForChatType, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { ChatType } from "../channels/chat-type.js";
 import { normalizeChatType } from "../channels/chat-type.js";
 import type { OpenClawConfig } from "../config/config.js";
@@ -54,6 +54,8 @@ export type ResolvedAgentRoute = {
     | "binding.account"
     | "binding.channel"
     | "default";
+  /** When true, the resolved agent is restricted from this chat type via allowedChatTypes. */
+  blocked?: boolean;
 };
 
 export { DEFAULT_ACCOUNT_ID, DEFAULT_AGENT_ID } from "./session-key.js";
@@ -695,6 +697,29 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     },
   ];
 
+  const chatType = normalizeChatType(peer?.kind);
+
+  // Check allowedChatTypes and fall back to default agent if blocked.
+  const withChatTypeGuard = (route: ResolvedAgentRoute): ResolvedAgentRoute => {
+    if (isAgentAllowedForChatType(input.cfg, route.agentId, chatType)) {
+      return route;
+    }
+    if (shouldLogDebug) {
+      logDebug(
+        `[routing] agent ${route.agentId} blocked for chatType=${chatType ?? "unknown"}; trying default`,
+      );
+    }
+    // Binding-matched agent is blocked — try the default agent.
+    if (route.matchedBy !== "default") {
+      const fallback = choose(resolveDefaultAgentId(input.cfg), "default");
+      if (isAgentAllowedForChatType(input.cfg, fallback.agentId, chatType)) {
+        return fallback;
+      }
+    }
+    // Default is also blocked (or was already the default); signal blocked.
+    return { ...route, blocked: true };
+  };
+
   for (const tier of tiers) {
     if (!tier.enabled) {
       continue;
@@ -711,9 +736,9 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
       if (shouldLogDebug) {
         logDebug(`[routing] match: matchedBy=${tier.matchedBy} agentId=${matched.binding.agentId}`);
       }
-      return choose(matched.binding.agentId, tier.matchedBy);
+      return withChatTypeGuard(choose(matched.binding.agentId, tier.matchedBy));
     }
   }
 
-  return choose(resolveDefaultAgentId(input.cfg), "default");
+  return withChatTypeGuard(choose(resolveDefaultAgentId(input.cfg), "default"));
 }

@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { ChatType } from "../channels/chat-type.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveAgentModelFallbackValues } from "../config/model-input.js";
 import { resolveStateDir } from "../config/paths.js";
@@ -141,6 +142,26 @@ export function resolveAgentConfig(
     sandbox: entry.sandbox,
     tools: entry.tools,
   };
+}
+
+/**
+ * Check whether the given agent is allowed to handle the given chat type.
+ * Returns true when no restriction is configured (backward compatible).
+ */
+export function isAgentAllowedForChatType(
+  cfg: OpenClawConfig,
+  agentId: string,
+  chatType: ChatType | undefined,
+): boolean {
+  const agentCfg = resolveAgentConfig(cfg, agentId);
+  const allowed = agentCfg?.groupChat?.allowedChatTypes;
+  if (!allowed || allowed.length === 0) {
+    return true;
+  }
+  if (!chatType) {
+    return true;
+  }
+  return allowed.includes(chatType);
 }
 
 export function resolveAgentSkillsFilter(

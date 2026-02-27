@@ -260,10 +260,13 @@ export const ModelsConfigSchema = z
   .strict()
   .optional();
 
+const ChatTypeEnumSchema = z.enum(["direct", "group", "channel"]);
+
 export const GroupChatSchema = z
   .object({
     mentionPatterns: z.array(z.string()).optional(),
     historyLimit: z.number().int().positive().optional(),
+    allowedChatTypes: z.array(ChatTypeEnumSchema).optional(),
   })
   .strict()
   .optional();
