@@ -1012,6 +1012,100 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.threadId).toBe("42");
   });
 
+  it.each([
+    {
+      testName: "forwards numeric threadId as string on completion direct-send",
+      threadId: 42 as string | number,
+      expectedThreadId: "42",
+    },
+    {
+      testName: "forwards string threadId unchanged on completion direct-send",
+      threadId: "99" as string | number,
+      expectedThreadId: "99",
+    },
+    {
+      testName: "forwards threadId 0 (Telegram General topic) on completion direct-send",
+      threadId: 0 as string | number,
+      expectedThreadId: "0",
+    },
+  ] as const)("$testName", async (testCase) => {
+    sendSpy.mockClear();
+    agentSpy.mockClear();
+    sessionStore = {
+      "agent:main:subagent:test": {
+        sessionId: `child-session-thread-edge-${testCase.expectedThreadId}`,
+      },
+      "agent:main:main": {
+        sessionId: `requester-session-thread-edge-${testCase.expectedThreadId}`,
+      },
+    };
+    chatHistoryMock.mockResolvedValueOnce({
+      messages: [{ role: "assistant", content: [{ type: "text", text: "done" }] }],
+    });
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: `run-thread-edge-${testCase.expectedThreadId}`,
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: {
+        channel: "telegram",
+        to: "telegram:-100123456789",
+        threadId: testCase.threadId,
+      },
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(agentSpy).not.toHaveBeenCalled();
+    const call = sendSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    expect(call?.params?.channel).toBe("telegram");
+    expect(call?.params?.to).toBe("telegram:-100123456789");
+    // threadId must be stringified and forwarded to the send call so
+    // Telegram delivers the announcement to the correct forum topic (#21162).
+    expect(call?.params?.threadId).toBe(testCase.expectedThreadId);
+  });
+
+  it("omits threadId from completion direct-send when origin has no thread", async () => {
+    sendSpy.mockClear();
+    agentSpy.mockClear();
+    sessionStore = {
+      "agent:main:subagent:test": {
+        sessionId: "child-session-no-thread",
+      },
+      "agent:main:main": {
+        sessionId: "requester-session-no-thread",
+      },
+    };
+    chatHistoryMock.mockResolvedValueOnce({
+      messages: [{ role: "assistant", content: [{ type: "text", text: "done" }] }],
+    });
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-no-thread",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: {
+        channel: "telegram",
+        to: "telegram:-100123456789",
+        // No threadId -- message was sent to a non-forum group or DM.
+      },
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(agentSpy).not.toHaveBeenCalled();
+    const call = sendSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    expect(call?.params?.channel).toBe("telegram");
+    expect(call?.params?.to).toBe("telegram:-100123456789");
+    expect(call?.params?.threadId).toBeUndefined();
+  });
+
   it("uses hook-provided thread target across requester thread variants", async () => {
     const cases = [
       {
