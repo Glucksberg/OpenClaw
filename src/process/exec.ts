@@ -105,12 +105,13 @@ export async function runExec(
 ): Promise<{ stdout: string; stderr: string }> {
   const options =
     typeof opts === "number"
-      ? { timeout: opts, encoding: "utf8" as const }
+      ? { timeout: opts, encoding: "utf8" as const, windowsHide: true }
       : {
           timeout: opts.timeoutMs,
           maxBuffer: opts.maxBuffer,
           cwd: opts.cwd,
           encoding: "utf8" as const,
+          windowsHide: true,
         };
   try {
     const argv = [command, ...args];
@@ -224,22 +225,16 @@ export async function runCommandWithTimeout(
   const stdio = resolveCommandStdio({ hasInput, preferInherit: true });
   const finalArgv = process.platform === "win32" ? (resolveNpmArgvForWindows(argv) ?? argv) : argv;
   const resolvedCommand = finalArgv !== argv ? (finalArgv[0] ?? "") : resolveCommand(argv[0] ?? "");
-  const useCmdWrapper = isWindowsBatchCommand(resolvedCommand);
-  const child = spawn(
-    useCmdWrapper ? (process.env.ComSpec ?? "cmd.exe") : resolvedCommand,
-    useCmdWrapper
-      ? ["/d", "/s", "/c", buildCmdExeCommandLine(resolvedCommand, finalArgv.slice(1))]
-      : finalArgv.slice(1),
-    {
-      stdio,
-      cwd,
-      env: resolvedEnv,
-      windowsVerbatimArguments: useCmdWrapper ? true : windowsVerbatimArguments,
-      ...(shouldSpawnWithShell({ resolvedCommand, platform: process.platform })
-        ? { shell: true }
-        : {}),
-    },
-  );
+  const child = spawn(resolvedCommand, finalArgv.slice(1), {
+    stdio,
+    cwd,
+    env: resolvedEnv,
+    windowsHide: true,
+    windowsVerbatimArguments,
+    ...(shouldSpawnWithShell({ resolvedCommand, platform: process.platform })
+      ? { shell: true }
+      : {}),
+  });
   // Spawn with inherited stdin (TTY) so tools like `pi` stay interactive when needed.
   return await new Promise((resolve, reject) => {
     let stdout = "";

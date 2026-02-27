@@ -1,3 +1,4 @@
+import os from "node:os";
 import { logDebug, logWarn } from "../logger.js";
 import { getLogger } from "../logging.js";
 import { ignoreCiaoCancellationRejection } from "./bonjour-ciao.js";
@@ -89,7 +90,15 @@ export async function startGatewayBonjourAdvertiser(
   }
 
   const { getResponder, Protocol } = await import("@homebridge/ciao");
-  const responder = getResponder();
+
+  // On Windows, ciao's NetworkManager polls network interfaces every ~15s by
+  // spawning `arp -a | findstr ...` via child_process.exec without windowsHide,
+  // which briefly flashes a cmd.exe console window. Passing explicit interface
+  // names makes ciao use its `restrictedInterfaces` path, which skips the
+  // ARP-based discovery entirely and avoids the console flash.
+  const responderOpts: Parameters<typeof getResponder>[0] =
+    process.platform === "win32" ? { interface: Object.keys(os.networkInterfaces()) } : undefined;
+  const responder = getResponder(responderOpts);
 
   // mDNS service instance names are single DNS labels; dots in hostnames (like
   // `Mac.localdomain`) can confuse some resolvers/browsers and break discovery.
