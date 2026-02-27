@@ -74,7 +74,7 @@ export const handleCompactCommand: CommandHandler = async (params) => {
   const ackChannel = params.ctx.OriginatingChannel || (params.command.channel as any);
   const ackTo = params.ctx.OriginatingTo || params.command.from || params.command.to;
   if (ackChannel && ackTo) {
-    void routeReply({
+    await routeReply({
       payload: { text: "🗜️ Compacting… It may take a while." },
       channel: ackChannel,
       to: ackTo,
