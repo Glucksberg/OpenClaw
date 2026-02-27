@@ -1,3 +1,4 @@
+import { isDoctorHintEnabled } from "../../config/commands.js";
 import { loadConfig } from "../../config/config.js";
 import { extractDeliveryInfo } from "../../config/sessions.js";
 import { resolveOpenClawPackageRoot } from "../../infra/openclaw-root.js";
@@ -63,7 +64,7 @@ export const updateHandlers: GatewayRequestHandlers = {
       deliveryContext,
       threadId,
       message: note ?? null,
-      doctorHint: formatDoctorNonInteractiveHint(),
+      doctorHint: isDoctorHintEnabled(config) ? formatDoctorNonInteractiveHint() : null,
       stats: {
         mode: result.mode,
         root: result.root ?? undefined,

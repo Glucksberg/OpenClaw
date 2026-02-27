@@ -88,3 +88,8 @@ export function isCommandFlagEnabled(
 export function isRestartEnabled(config?: { commands?: unknown }): boolean {
   return getOwnCommandFlagValue(config, "restart") !== false;
 }
+
+/** Whether the "Run: openclaw doctor --non-interactive" hint should appear in restart notifications. */
+export function isDoctorHintEnabled(config?: { commands?: CommandsConfig }): boolean {
+  return config?.commands?.restartNotification?.showDoctorHint !== false;
+}

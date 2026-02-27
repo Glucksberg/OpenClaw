@@ -166,6 +166,11 @@ export type CommandsConfig = {
    * Example: { "*": ["user1"], discord: ["user:123"] }
    */
   allowFrom?: CommandAllowFrom;
+  /** Controls what appears in restart notification messages. */
+  restartNotification?: {
+    /** Include "Run: openclaw doctor --non-interactive" hint in restart messages (default: true). */
+    showDoctorHint?: boolean;
+  };
 };
 
 export type ProviderCommandsConfig = {

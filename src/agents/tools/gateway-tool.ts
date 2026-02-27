@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { isRestartEnabled } from "../../config/commands.js";
+import { isDoctorHintEnabled, isRestartEnabled } from "../../config/commands.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { resolveConfigSnapshotHash } from "../../config/io.js";
 import { extractDeliveryInfo } from "../../config/sessions.js";
@@ -108,7 +108,7 @@ export function createGatewayTool(opts?: {
           deliveryContext,
           threadId,
           message: note ?? reason ?? null,
-          doctorHint: formatDoctorNonInteractiveHint(),
+          doctorHint: isDoctorHintEnabled(opts?.config) ? formatDoctorNonInteractiveHint() : null,
           stats: {
             mode: "gateway.restart",
             reason,

@@ -452,6 +452,8 @@ export const FIELD_LABELS: Record<string, string> = {
   "commands.ownerDisplay": "Owner ID Display",
   "commands.ownerDisplaySecret": "Owner ID Hash Secret",
   "commands.allowFrom": "Command Elevated Access Rules",
+  "commands.restartNotification": "Restart Notification",
+  "commands.restartNotification.showDoctorHint": "Show Doctor Hint",
   ui: "UI",
   "ui.seamColor": "Accent Color",
   "ui.assistant": "Assistant Appearance",

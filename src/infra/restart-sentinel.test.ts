@@ -100,6 +100,31 @@ describe("restart sentinel", () => {
     expect(trimmed?.startsWith("…")).toBe(true);
   });
 
+  it("formatRestartSentinelMessage omits doctorHint when null", () => {
+    const payload = {
+      kind: "config-patch" as const,
+      status: "ok" as const,
+      ts: Date.now(),
+      doctorHint: null,
+      stats: { mode: "config.patch" },
+    };
+    const result = formatRestartSentinelMessage(payload);
+    expect(result).toContain("Gateway restart");
+    expect(result).not.toContain("doctor");
+  });
+
+  it("formatRestartSentinelMessage includes doctorHint when present", () => {
+    const payload = {
+      kind: "config-patch" as const,
+      status: "ok" as const,
+      ts: Date.now(),
+      doctorHint: "Run: openclaw doctor --non-interactive",
+      stats: { mode: "config.patch" },
+    };
+    const result = formatRestartSentinelMessage(payload);
+    expect(result).toContain("doctor");
+  });
+
   it("formats restart messages without volatile timestamps", () => {
     const payloadA = {
       kind: "restart" as const,

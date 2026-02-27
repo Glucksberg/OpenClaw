@@ -986,6 +986,10 @@ export const FIELD_HELP: Record<string, string> = {
     "Optional secret used to HMAC hash owner IDs when ownerDisplay=hash. Prefer env substitution.",
   "commands.allowFrom":
     "Defines elevated command allow rules by channel and sender for owner-level command surfaces. Use narrow provider-specific identities so privileged commands are not exposed to broad chat audiences.",
+  "commands.restartNotification":
+    "Controls the content of restart notification messages sent after gateway restarts.",
+  "commands.restartNotification.showDoctorHint":
+    'Whether to include the "Run: openclaw doctor --non-interactive" hint in restart notification messages (default: true). Disable if you run doctor automatically after restarts.',
   session:
     "Global session routing, reset, delivery policy, and maintenance controls for conversation history behavior. Keep defaults unless you need stricter isolation, retention, or delivery constraints.",
   "session.scope":

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isCommandFlagEnabled,
+  isDoctorHintEnabled,
   isRestartEnabled,
   isNativeCommandsExplicitlyDisabled,
   resolveNativeCommandsEnabled,
@@ -130,5 +131,36 @@ describe("isCommandFlagEnabled", () => {
         "bash",
       ),
     ).toBe(false);
+  });
+});
+
+describe("isDoctorHintEnabled", () => {
+  it("defaults to true when config is undefined", () => {
+    expect(isDoctorHintEnabled(undefined)).toBe(true);
+  });
+
+  it("defaults to true when commands is empty", () => {
+    expect(isDoctorHintEnabled({})).toBe(true);
+    expect(isDoctorHintEnabled({ commands: {} })).toBe(true);
+  });
+
+  it("defaults to true when restartNotification is empty", () => {
+    expect(isDoctorHintEnabled({ commands: { restartNotification: {} } })).toBe(true);
+  });
+
+  it("returns false when explicitly disabled", () => {
+    expect(
+      isDoctorHintEnabled({
+        commands: { restartNotification: { showDoctorHint: false } },
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true when explicitly enabled", () => {
+    expect(
+      isDoctorHintEnabled({
+        commands: { restartNotification: { showDoctorHint: true } },
+      }),
+    ).toBe(true);
   });
 });

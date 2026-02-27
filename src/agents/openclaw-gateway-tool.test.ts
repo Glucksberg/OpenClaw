@@ -100,6 +100,47 @@ describe("gateway tool", () => {
     }
   });
 
+  it("suppresses doctorHint when showDoctorHint is false", async () => {
+    vi.useFakeTimers();
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-test-"));
+
+    try {
+      await withEnvAsync(
+        { OPENCLAW_STATE_DIR: stateDir, OPENCLAW_PROFILE: "isolated" },
+        async () => {
+          const tool = createOpenClawTools({
+            config: {
+              commands: {
+                restart: true,
+                restartNotification: { showDoctorHint: false },
+              },
+            },
+          }).find((candidate) => candidate.name === "gateway");
+          expect(tool).toBeDefined();
+
+          await tool!.execute("call-no-hint", {
+            action: "restart",
+            delayMs: 0,
+          });
+
+          const sentinelPath = path.join(stateDir, "restart-sentinel.json");
+          const raw = await fs.readFile(sentinelPath, "utf-8");
+          const parsed = JSON.parse(raw) as {
+            payload?: { doctorHint?: string | null };
+          };
+          expect(parsed.payload?.doctorHint).toBeNull();
+
+          await vi.runAllTimersAsync();
+        },
+      );
+    } finally {
+      kill.mockRestore();
+      vi.useRealTimers();
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("passes config.apply through gateway call", async () => {
     const { callGatewayTool } = await import("./tools/gateway.js");
     const sessionKey = "agent:main:whatsapp:dm:+15555550123";

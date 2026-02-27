@@ -206,6 +206,12 @@ export const CommandsSchema = z
     ownerDisplay: z.enum(["raw", "hash"]).optional().default("raw"),
     ownerDisplaySecret: z.string().optional().register(sensitive),
     allowFrom: ElevatedAllowFromSchema.optional(),
+    restartNotification: z
+      .object({
+        showDoctorHint: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional()

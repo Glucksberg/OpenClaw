@@ -1,5 +1,6 @@
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import { listChannelPlugins } from "../../channels/plugins/index.js";
+import { isDoctorHintEnabled } from "../../config/commands.js";
 import {
   CONFIG_PATH,
   loadConfig,
@@ -182,6 +183,7 @@ function buildConfigRestartSentinelPayload(params: {
   threadId: ReturnType<typeof extractDeliveryInfo>["threadId"];
   note: string | undefined;
 }): RestartSentinelPayload {
+  const config = loadConfig();
   return {
     kind: params.kind,
     status: "ok",
@@ -190,7 +192,7 @@ function buildConfigRestartSentinelPayload(params: {
     deliveryContext: params.deliveryContext,
     threadId: params.threadId,
     message: params.note ?? null,
-    doctorHint: formatDoctorNonInteractiveHint(),
+    doctorHint: isDoctorHintEnabled(config) ? formatDoctorNonInteractiveHint() : null,
     stats: {
       mode: params.mode,
       root: CONFIG_PATH,
