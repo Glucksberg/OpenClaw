@@ -308,6 +308,8 @@ describe("messaging tool media URL tracking", () => {
 
   it("tracks tts tool result media for deduplication", async () => {
     const { ctx } = createTestContext();
+    // onToolResult must be present for media to be tracked (delivery path active).
+    ctx.params.onToolResult = vi.fn();
 
     const startEvt: ToolExecutionStartEvent = {
       type: "tool_execution_start",
@@ -360,6 +362,8 @@ describe("messaging tool media URL tracking", () => {
 
   it("tracks browser tool MEDIA: result for deduplication", async () => {
     const { ctx } = createTestContext();
+    // onToolResult must be present for media to be tracked (delivery path active).
+    ctx.params.onToolResult = vi.fn();
 
     const startEvt: ToolExecutionStartEvent = {
       type: "tool_execution_start",
@@ -385,6 +389,41 @@ describe("messaging tool media URL tracking", () => {
     await handleToolExecutionEnd(ctx, endEvt);
 
     expect(ctx.state.messagingToolSentMediaUrls).toContain("/tmp/screenshot.png");
+  });
+
+  it("does not track non-messaging tool media when onToolResult is absent (follow-up runs)", async () => {
+    const { ctx } = createTestContext();
+    // createTestContext sets onToolResult to undefined, simulating follow-up runs
+    // where runEmbeddedPiAgent is invoked without onToolResult.
+    expect(ctx.params.onToolResult).toBeUndefined();
+
+    const startEvt: ToolExecutionStartEvent = {
+      type: "tool_execution_start",
+      toolName: "browser",
+      toolCallId: "tool-br-no-cb",
+      args: { action: "screenshot" },
+    };
+    await handleToolExecutionStart(ctx, startEvt);
+
+    const endEvt: ToolExecutionEndEvent = {
+      type: "tool_execution_end",
+      toolName: "browser",
+      toolCallId: "tool-br-no-cb",
+      isError: false,
+      result: {
+        content: [
+          { type: "text", text: "MEDIA:/tmp/screenshot.png" },
+          { type: "image", data: "base64", mimeType: "image/png" },
+        ],
+        details: { path: "/tmp/screenshot.png" },
+      },
+    };
+    await handleToolExecutionEnd(ctx, endEvt);
+
+    // Media should NOT be tracked because without onToolResult the media is never
+    // delivered to the user; tracking it would cause the final reply's media
+    // attachment to be incorrectly stripped as a duplicate.
+    expect(ctx.state.messagingToolSentMediaUrls).toHaveLength(0);
   });
 
   it("does not track non-messaging tool media when shouldEmitToolOutput is true (verbose=full)", async () => {
