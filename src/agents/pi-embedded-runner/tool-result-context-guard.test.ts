@@ -141,9 +141,10 @@ describe("installToolResultContextGuard", () => {
     // Old tool results should be compacted
     expect(first).toBe(PREEMPTIVE_TOOL_RESULT_COMPACTION_PLACEHOLDER);
     expect(second).toBe(PREEMPTIVE_TOOL_RESULT_COMPACTION_PLACEHOLDER);
-    // Trailing tool result is protected
+    // Trailing tool result is protected from compaction but may be truncated to fit budget
     expect(third).not.toBe(PREEMPTIVE_TOOL_RESULT_COMPACTION_PLACEHOLDER);
-    expect(third.length).toBe(800);
+    expect(third.length).toBeLessThan(800);
+    expect(third).toContain(CONTEXT_LIMIT_TRUNCATION_NOTICE);
   });
 
   it("survives repeated large tool results by compacting older outputs before later turns", async () => {
