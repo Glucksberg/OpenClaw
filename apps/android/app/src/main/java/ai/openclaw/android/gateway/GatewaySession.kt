@@ -634,70 +634,73 @@ class GatewaySession(
     }
   }
 
-  private fun normalizeCanvasHostUrl(
-    raw: String?,
-    endpoint: GatewayEndpoint,
-    isTlsConnection: Boolean,
-  ): String? {
-    val trimmed = raw?.trim().orEmpty()
-    val parsed = trimmed.takeIf { it.isNotBlank() }?.let { runCatching { java.net.URI(it) }.getOrNull() }
-    val host = parsed?.host?.trim().orEmpty()
-    val port = parsed?.port ?: -1
-    val scheme = parsed?.scheme?.trim().orEmpty().ifBlank { "http" }
-    val suffix = buildUrlSuffix(parsed)
+}
 
-    // If raw URL is a non-loopback address and this connection uses TLS,
-    // normalize scheme/port to the endpoint we actually connected to.
-    if (trimmed.isNotBlank() && host.isNotBlank() && !isLoopbackHost(host)) {
-      val needsTlsRewrite =
-        isTlsConnection &&
-          (
-            !scheme.equals("https", ignoreCase = true) ||
-              (port > 0 && port != endpoint.port) ||
-              (port <= 0 && endpoint.port != 443)
-            )
-      if (needsTlsRewrite) {
-        return buildCanvasUrl(host = host, scheme = "https", port = endpoint.port, suffix = suffix)
-      }
-      return trimmed
+// --- Extracted helpers (internal for testability) ---
+
+internal fun normalizeCanvasHostUrl(
+  raw: String?,
+  endpoint: GatewayEndpoint,
+  isTlsConnection: Boolean,
+): String? {
+  val trimmed = raw?.trim().orEmpty()
+  val parsed = trimmed.takeIf { it.isNotBlank() }?.let { runCatching { java.net.URI(it) }.getOrNull() }
+  val host = parsed?.host?.trim().orEmpty()
+  val port = parsed?.port ?: -1
+  val scheme = parsed?.scheme?.trim().orEmpty().ifBlank { "http" }
+  val suffix = buildCanvasUrlSuffix(parsed)
+
+  // If raw URL is a non-loopback address and this connection uses TLS,
+  // normalize scheme/port to the endpoint we actually connected to.
+  if (trimmed.isNotBlank() && host.isNotBlank() && !isLoopbackHost(host)) {
+    val needsTlsRewrite =
+      isTlsConnection &&
+        (
+          !scheme.equals("https", ignoreCase = true) ||
+            (port > 0 && port != endpoint.port) ||
+            (port <= 0 && endpoint.port != 443)
+          )
+    if (needsTlsRewrite) {
+      return buildCanvasUrl(host = host, scheme = "https", port = endpoint.port, suffix = suffix)
     }
-
-    val fallbackHost =
-      endpoint.tailnetDns?.trim().takeIf { !it.isNullOrEmpty() }
-        ?: endpoint.lanHost?.trim().takeIf { !it.isNullOrEmpty() }
-        ?: endpoint.host.trim()
-    if (fallbackHost.isEmpty()) return trimmed.ifBlank { null }
-
-    // For TLS connections, use the connected endpoint's scheme/port instead of raw canvas metadata.
-    val fallbackScheme = if (isTlsConnection) "https" else scheme
-    // For TLS, always use the connected endpoint port.
-    val fallbackPort = if (isTlsConnection) endpoint.port else (endpoint.canvasPort ?: endpoint.port)
-    return buildCanvasUrl(host = fallbackHost, scheme = fallbackScheme, port = fallbackPort, suffix = suffix)
+    return trimmed
   }
 
-  private fun buildCanvasUrl(host: String, scheme: String, port: Int, suffix: String): String {
-    val loweredScheme = scheme.lowercase()
-    val formattedHost = if (host.contains(":")) "[${host}]" else host
-    val portSuffix = if ((loweredScheme == "https" && port == 443) || (loweredScheme == "http" && port == 80)) "" else ":$port"
-    return "$loweredScheme://$formattedHost$portSuffix$suffix"
-  }
+  val fallbackHost =
+    endpoint.tailnetDns?.trim().takeIf { !it.isNullOrEmpty() }
+      ?: endpoint.lanHost?.trim().takeIf { !it.isNullOrEmpty() }
+      ?: endpoint.host.trim()
+  if (fallbackHost.isEmpty()) return trimmed.ifBlank { null }
 
-  private fun buildUrlSuffix(uri: java.net.URI?): String {
-    if (uri == null) return ""
-    val path = uri.rawPath?.takeIf { it.isNotBlank() } ?: ""
-    val query = uri.rawQuery?.takeIf { it.isNotBlank() }?.let { "?$it" } ?: ""
-    val fragment = uri.rawFragment?.takeIf { it.isNotBlank() }?.let { "#$it" } ?: ""
-    return "$path$query$fragment"
-  }
+  // For TLS connections, use the connected endpoint's scheme/port instead of raw canvas metadata.
+  val fallbackScheme = if (isTlsConnection) "https" else scheme
+  // For TLS, always use the connected endpoint port.
+  val fallbackPort = if (isTlsConnection) endpoint.port else (endpoint.canvasPort ?: endpoint.port)
+  return buildCanvasUrl(host = fallbackHost, scheme = fallbackScheme, port = fallbackPort, suffix = suffix)
+}
 
-  private fun isLoopbackHost(raw: String?): Boolean {
-    val host = raw?.trim()?.lowercase().orEmpty()
-    if (host.isEmpty()) return false
-    if (host == "localhost") return true
-    if (host == "::1") return true
-    if (host == "0.0.0.0" || host == "::") return true
-    return host.startsWith("127.")
-  }
+internal fun buildCanvasUrl(host: String, scheme: String, port: Int, suffix: String): String {
+  val loweredScheme = scheme.lowercase()
+  val formattedHost = if (host.contains(":")) "[${host}]" else host
+  val portSuffix = if ((loweredScheme == "https" && port == 443) || (loweredScheme == "http" && port == 80)) "" else ":$port"
+  return "$loweredScheme://$formattedHost$portSuffix$suffix"
+}
+
+internal fun buildCanvasUrlSuffix(uri: java.net.URI?): String {
+  if (uri == null) return ""
+  val path = uri.rawPath?.takeIf { it.isNotBlank() } ?: ""
+  val query = uri.rawQuery?.takeIf { it.isNotBlank() }?.let { "?$it" } ?: ""
+  val fragment = uri.rawFragment?.takeIf { it.isNotBlank() }?.let { "#$it" } ?: ""
+  return "$path$query$fragment"
+}
+
+internal fun isLoopbackHost(raw: String?): Boolean {
+  val host = raw?.trim()?.lowercase().orEmpty()
+  if (host.isEmpty()) return false
+  if (host == "localhost") return true
+  if (host == "::1") return true
+  if (host == "0.0.0.0" || host == "::") return true
+  return host.startsWith("127.")
 }
 
 private fun JsonElement?.asObjectOrNull(): JsonObject? = this as? JsonObject
