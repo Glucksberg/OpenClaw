@@ -28,6 +28,7 @@ export function handleAgentStart(ctx: EmbeddedPiSubscribeContext) {
 export function handleAgentEnd(ctx: EmbeddedPiSubscribeContext) {
   const lastAssistant = ctx.state.lastAssistant;
   const isError = isAssistantMessage(lastAssistant) && lastAssistant.stopReason === "error";
+  let errorText: string | undefined;
 
   if (isError && lastAssistant) {
     const friendlyError = formatAssistantErrorText(lastAssistant, {
@@ -36,7 +37,7 @@ export function handleAgentEnd(ctx: EmbeddedPiSubscribeContext) {
       provider: lastAssistant.provider,
       model: lastAssistant.model,
     });
-    const errorText = (friendlyError || lastAssistant.errorMessage || "LLM request failed.").trim();
+    errorText = (friendlyError || lastAssistant.errorMessage || "LLM request failed.").trim();
     ctx.log.warn(
       `embedded run agent end: runId=${ctx.params.runId} isError=true error=${errorText}`,
     );
@@ -70,6 +71,33 @@ export function handleAgentEnd(ctx: EmbeddedPiSubscribeContext) {
       stream: "lifecycle",
       data: { phase: "end" },
     });
+  }
+
+  // Fire agent_end plugin hook from the streaming subscription so it triggers
+  // regardless of whether the post-prompt code in runEmbeddedAttempt() is reached.
+  // This fixes the bug where streaming mode never called hookRunner.runAgentEnd().
+  const hookRunner = ctx.hookRunner;
+  if (hookRunner?.hasHooks("agent_end")) {
+    ctx.state.agentEndHookFired = true;
+    const messages = ctx.params.session.messages.slice();
+    hookRunner
+      .runAgentEnd(
+        {
+          messages,
+          success: !isError,
+          error: errorText,
+        },
+        {
+          agentId: ctx.params.hookAgentId,
+          sessionKey: ctx.params.sessionKey,
+          sessionId: ctx.params.sessionId,
+          workspaceDir: ctx.params.workspaceDir,
+          messageProvider: ctx.params.messageProvider,
+        },
+      )
+      .catch((err) => {
+        ctx.log.warn(`agent_end hook failed (streaming): ${String(err)}`);
+      });
   }
 
   ctx.flushBlockReplyBuffer();

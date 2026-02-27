@@ -891,6 +891,11 @@ export async function runEmbeddedAttempt(
         enforceFinalTag: params.enforceFinalTag,
         config: params.config,
         sessionKey: params.sessionKey ?? params.sessionId,
+        // Hook context for agent_end hook fired from streaming subscription handler
+        hookAgentId: sessionAgentId,
+        sessionId: params.sessionId,
+        workspaceDir: params.workspaceDir,
+        messageProvider: params.messageProvider ?? undefined,
       });
 
       const {
@@ -906,6 +911,7 @@ export async function runEmbeddedAttempt(
         getLastToolError,
         getUsageTotals,
         getCompactionCount,
+        didFireAgentEndHook,
       } = subscription;
 
       const queueHandle: EmbeddedPiQueueHandle = {
@@ -1227,10 +1233,11 @@ export async function runEmbeddedAttempt(
         });
         anthropicPayloadLogger?.recordUsage(messagesSnapshot, promptError);
 
-        // Run agent_end hooks to allow plugins to analyze the conversation
-        // This is fire-and-forget, so we don't await
-        // Run even on compaction timeout so plugins can log/cleanup
-        if (hookRunner?.hasHooks("agent_end")) {
+        // Run agent_end hooks to allow plugins to analyze the conversation.
+        // Skip if the streaming subscription handler already fired the hook
+        // (it fires from the agent_end event, which always arrives in streaming mode).
+        // Fire-and-forget; run even on compaction timeout so plugins can log/cleanup.
+        if (hookRunner?.hasHooks("agent_end") && !didFireAgentEndHook()) {
           hookRunner
             .runAgentEnd(
               {

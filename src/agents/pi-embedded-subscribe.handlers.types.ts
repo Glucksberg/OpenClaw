@@ -77,6 +77,8 @@ export type EmbeddedPiSubscribeState = {
   successfulCronAdds: number;
   pendingMessagingMediaUrls: Map<string, string[]>;
   lastAssistant?: AgentMessage;
+  /** Set when the agent_end plugin hook has been fired from the streaming handler. */
+  agentEndHookFired?: boolean;
 };
 
 export type EmbeddedPiSubscribeContext = {

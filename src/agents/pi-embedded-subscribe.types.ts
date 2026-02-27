@@ -31,6 +31,11 @@ export type SubscribeEmbeddedPiSessionParams = {
   enforceFinalTag?: boolean;
   config?: OpenClawConfig;
   sessionKey?: string;
+  /** Hook context fields for firing agent_end hook from streaming subscription. */
+  hookAgentId?: string;
+  sessionId?: string;
+  workspaceDir?: string;
+  messageProvider?: string;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";
