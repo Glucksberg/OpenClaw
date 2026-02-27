@@ -532,4 +532,14 @@ describe("classifyFailoverReason", () => {
       ),
     ).toBe("timeout");
   });
+  it("classifies connection errors as timeout for failover (e.g. MiniMax)", () => {
+    expect(classifyFailoverReason("Connection error.")).toBe("timeout");
+    expect(classifyFailoverReason("connection error")).toBe("timeout");
+    expect(classifyFailoverReason("connect error")).toBe("timeout");
+    expect(classifyFailoverReason("connect ECONNREFUSED 127.0.0.1:443")).toBe("timeout");
+    expect(classifyFailoverReason("connect ECONNRESET")).toBe("timeout");
+    expect(classifyFailoverReason("getaddrinfo ENOTFOUND api.minimax.chat")).toBe("timeout");
+    expect(classifyFailoverReason("connect ENETUNREACH 2001:db8::1:443")).toBe("timeout");
+    expect(classifyFailoverReason("connect EHOSTUNREACH 10.0.0.1:443")).toBe("timeout");
+  });
 });

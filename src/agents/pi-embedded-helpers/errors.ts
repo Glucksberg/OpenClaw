@@ -644,6 +644,14 @@ const ERROR_PATTERNS = {
     /\bstop reason:\s*abort\b/i,
     /\breason:\s*abort\b/i,
     /\bunhandled stop reason:\s*abort\b/i,
+    // Transient TCP/DNS connection failures (e.g. MiniMax "Connection error.")
+    "connection error",
+    "connect error",
+    /\beconnrefused\b/i,
+    /\beconnreset\b/i,
+    /\benotfound\b/i,
+    /\benetunreach\b/i,
+    /\behostunreach\b/i,
   ],
   billing: [
     /["']?(?:status|code)["']?\s*[:=]\s*402\b|\bhttp\s*402\b|\berror(?:\s+code)?\s*[:=]?\s*402\b|\b(?:got|returned|received)\s+(?:a\s+)?402\b|^\s*402\s+payment/i,
