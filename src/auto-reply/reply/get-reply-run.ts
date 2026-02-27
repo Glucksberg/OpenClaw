@@ -542,5 +542,6 @@ export async function runPreparedReply(
     sessionCtx,
     shouldInjectGroupIntro,
     typingMode,
+    compactionAuditReads: agentCfg?.compaction?.auditReads,
   });
 }
