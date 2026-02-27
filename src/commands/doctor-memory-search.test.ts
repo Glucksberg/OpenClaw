@@ -219,7 +219,54 @@ describe("noteMemorySearchHealth", () => {
     expect(message).not.toContain("openclaw auth add --provider");
   });
 
-  it("warns in auto mode when no local modelPath and no API keys are configured", async () => {
+  it("mentions missing models.providers.google when gemini provider has no API key and no provider block", async () => {
+    resolveMemorySearchConfig.mockReturnValue({
+      provider: "gemini",
+      local: {},
+      remote: {},
+    });
+
+    await noteMemorySearchHealth(cfg);
+
+    expect(note).toHaveBeenCalledTimes(1);
+    const message = String(note.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("models.providers.google");
+    expect(message).toContain('Add a "google" entry to models.providers');
+  });
+
+  it("mentions missing models.providers.openai when openai provider has no API key and no provider block", async () => {
+    resolveMemorySearchConfig.mockReturnValue({
+      provider: "openai",
+      local: {},
+      remote: {},
+    });
+
+    await noteMemorySearchHealth(cfg);
+
+    expect(note).toHaveBeenCalledTimes(1);
+    const message = String(note.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("models.providers.openai");
+  });
+
+  it("does not mention missing provider block when models.providers entry exists", async () => {
+    const cfgWithProvider = {
+      models: { providers: { google: { baseUrl: "https://example.com", models: [] } } },
+    } as unknown as OpenClawConfig;
+    resolveMemorySearchConfig.mockReturnValue({
+      provider: "gemini",
+      local: {},
+      remote: {},
+    });
+
+    await noteMemorySearchHealth(cfgWithProvider);
+
+    expect(note).toHaveBeenCalledTimes(1);
+    const message = String(note.mock.calls[0]?.[0] ?? "");
+    expect(message).not.toContain("models.providers.google section is not configured");
+    expect(message).not.toContain('Add a "google" entry');
+  });
+
+  it("uses model configure hint in auto mode when no provider credentials are found", async () => {
     resolveMemorySearchConfig.mockReturnValue({
       provider: "auto",
       local: {},

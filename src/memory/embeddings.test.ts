@@ -507,6 +507,41 @@ describe("FTS-only fallback when no provider available", () => {
     expect(result.providerUnavailableReason).toBeDefined();
   });
 
+  it("includes models.providers hint when explicit gemini provider has no key and no provider block", async () => {
+    vi.mocked(authModule.resolveApiKeyForProvider).mockRejectedValue(
+      new Error('No API key found for provider "google"'),
+    );
+
+    const result = await createEmbeddingProvider({
+      config: {} as never,
+      provider: "gemini",
+      model: "gemini-embedding-001",
+      fallback: "none",
+    });
+
+    expect(result.provider).toBeNull();
+    expect(result.providerUnavailableReason).toContain("models.providers.google");
+    expect(result.providerUnavailableReason).toContain("GEMINI_API_KEY");
+  });
+
+  it("does not include models.providers hint when provider block exists", async () => {
+    vi.mocked(authModule.resolveApiKeyForProvider).mockRejectedValue(
+      new Error('No API key found for provider "google"'),
+    );
+
+    const result = await createEmbeddingProvider({
+      config: {
+        models: { providers: { google: { baseUrl: "https://example.com", models: [] } } },
+      } as never,
+      provider: "gemini",
+      model: "gemini-embedding-001",
+      fallback: "none",
+    });
+
+    expect(result.provider).toBeNull();
+    expect(result.providerUnavailableReason).not.toContain("models.providers.google");
+  });
+
   it("returns null provider when both primary and fallback fail with missing API keys", async () => {
     vi.mocked(authModule.resolveApiKeyForProvider).mockRejectedValue(
       new Error("No API key found for provider"),

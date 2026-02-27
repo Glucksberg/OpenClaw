@@ -226,6 +226,11 @@ export async function createEmbeddingProvider(
     return { ...primary, requestedProvider };
   } catch (primaryErr) {
     const reason = formatPrimaryError(primaryErr, requestedProvider);
+    // When a missing API key is the root cause, append a hint about the
+    // models.providers config dependency so users know where to look.
+    const reasonWithHint = isMissingApiKeyError(primaryErr)
+      ? appendProviderConfigHint(reason, requestedProvider, options.config)
+      : reason;
     if (fallback && fallback !== "none" && fallback !== requestedProvider) {
       try {
         const fallbackResult = await createProvider(fallback);
@@ -233,19 +238,19 @@ export async function createEmbeddingProvider(
           ...fallbackResult,
           requestedProvider,
           fallbackFrom: requestedProvider,
-          fallbackReason: reason,
+          fallbackReason: reasonWithHint,
         };
       } catch (fallbackErr) {
         // Both primary and fallback failed - check if it's auth-related
         const fallbackReason = formatErrorMessage(fallbackErr);
-        const combinedReason = `${reason}\n\nFallback to ${fallback} failed: ${fallbackReason}`;
+        const combinedReason = `${reasonWithHint}\n\nFallback to ${fallback} failed: ${fallbackReason}`;
         if (isMissingApiKeyError(primaryErr) && isMissingApiKeyError(fallbackErr)) {
           // Both failed due to missing API keys - return null for FTS-only mode
           return {
             provider: null,
             requestedProvider,
             fallbackFrom: requestedProvider,
-            fallbackReason: reason,
+            fallbackReason: reasonWithHint,
             providerUnavailableReason: combinedReason,
           };
         }
@@ -260,7 +265,7 @@ export async function createEmbeddingProvider(
       return {
         provider: null,
         requestedProvider,
-        providerUnavailableReason: reason,
+        providerUnavailableReason: reasonWithHint,
       };
     }
     const wrapped = new Error(reason) as Error & { cause?: unknown };
@@ -303,4 +308,49 @@ function formatLocalSetupError(err: unknown): string {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/**
+ * Map embedding provider id to the key used in models.providers config.
+ * "gemini" -> "google"; others are 1:1.
+ */
+function embeddingProviderConfigKey(provider: string): string {
+  return provider === "gemini" ? "google" : provider;
+}
+
+/**
+ * When a missing API key error occurs for an explicit provider, check whether
+ * the models.providers block is absent and append a targeted hint so users
+ * understand the config dependency.
+ */
+function appendProviderConfigHint(
+  reason: string,
+  provider: EmbeddingProviderId,
+  config: OpenClawConfig,
+): string {
+  const configKey = embeddingProviderConfigKey(provider);
+  const hasProviderBlock = Boolean(config.models?.providers?.[configKey]);
+  if (hasProviderBlock) {
+    return reason;
+  }
+  return [
+    reason,
+    `Hint: memorySearch provider "${provider}" requires a matching models.providers.${configKey} entry in openclaw.json (with apiKey), or a ${providerEnvVarName(provider)} environment variable.`,
+    `Run "openclaw doctor" for detailed guidance.`,
+  ].join("\n");
+}
+
+function providerEnvVarName(provider: string): string {
+  switch (provider) {
+    case "openai":
+      return "OPENAI_API_KEY";
+    case "gemini":
+      return "GEMINI_API_KEY";
+    case "voyage":
+      return "VOYAGE_API_KEY";
+    case "mistral":
+      return "MISTRAL_API_KEY";
+    default:
+      return `${provider.toUpperCase()}_API_KEY`;
+  }
 }

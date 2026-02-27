@@ -95,19 +95,30 @@ export async function noteMemorySearchHealth(
     }
     const gatewayProbeWarning = buildGatewayProbeWarning(opts?.gatewayMemoryProbe);
     const envVar = providerEnvVar(resolved.provider);
+    const providerConfigKey = embeddingProviderToConfigKey(resolved.provider);
+    const hasProviderBlock = Boolean(cfg.models?.providers?.[providerConfigKey]);
     note(
       [
         `Memory search provider is set to "${resolved.provider}" but no API key was found.`,
         `Semantic recall will not work without a valid API key.`,
+        // Surface the models.providers dependency when the provider block is missing.
+        !hasProviderBlock
+          ? `The models.providers.${providerConfigKey} section is not configured in openclaw.json.`
+          : null,
         gatewayProbeWarning ? gatewayProbeWarning : null,
         "",
         "Fix (pick one):",
         `- Set ${envVar} in your environment`,
+        !hasProviderBlock
+          ? `- Add a "${providerConfigKey}" entry to models.providers in openclaw.json with your API key`
+          : null,
         `- Configure credentials: ${formatCliCommand("openclaw configure --section model")}`,
         `- To disable: ${formatCliCommand("openclaw config set agents.defaults.memorySearch.enabled false")}`,
         "",
         `Verify: ${formatCliCommand("openclaw memory status --deep")}`,
-      ].join("\n"),
+      ]
+        .filter((line) => line !== null)
+        .join("\n"),
       "Memory search",
     );
     return;
@@ -211,6 +222,17 @@ function providerEnvVar(provider: string): string {
     default:
       return `${provider.toUpperCase()}_API_KEY`;
   }
+}
+
+/**
+ * Map a memorySearch embedding provider name to the corresponding
+ * models.providers config key. "gemini" -> "google"; others are 1:1.
+ */
+function embeddingProviderToConfigKey(provider: string): string {
+  if (provider === "gemini") {
+    return "google";
+  }
+  return provider;
 }
 
 function buildGatewayProbeWarning(
