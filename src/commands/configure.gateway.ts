@@ -5,7 +5,7 @@ import {
   TAILSCALE_EXPOSURE_OPTIONS,
   TAILSCALE_MISSING_BIN_NOTE_LINES,
 } from "../gateway/gateway-config-prompts.shared.js";
-import { findTailscaleBinary } from "../infra/tailscale.js";
+import { findTailscaleBinary, getTailnetHostname } from "../infra/tailscale.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { validateIPv4AddressInput } from "../shared/net/ipv4.js";
 import { note } from "../terminal/note.js";
@@ -284,6 +284,29 @@ export async function promptGatewayConfig(
       },
     },
   };
+
+  // Auto-add Tailscale origin to controlUi.allowedOrigins so the Control UI
+  // is accessible via the Tailscale hostname without manual config.
+  if (tailscaleMode === "serve" || tailscaleMode === "funnel") {
+    const tsOrigin = await getTailnetHostname()
+      .then((h) => `https://${h}`)
+      .catch(() => null);
+    if (tsOrigin) {
+      const existing = next.gateway?.controlUi?.allowedOrigins ?? [];
+      if (!existing.some((o) => o.toLowerCase() === tsOrigin.toLowerCase())) {
+        next = {
+          ...next,
+          gateway: {
+            ...next.gateway,
+            controlUi: {
+              ...next.gateway?.controlUi,
+              allowedOrigins: [...existing, tsOrigin],
+            },
+          },
+        };
+      }
+    }
+  }
 
   return { config: next, port, token: gatewayToken };
 }

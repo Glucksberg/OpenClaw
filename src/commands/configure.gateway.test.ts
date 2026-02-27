@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   buildGatewayAuthConfig: vi.fn(),
   note: vi.fn(),
   randomToken: vi.fn(),
+  getTailnetHostname: vi.fn(),
 }));
 
 vi.mock("../config/config.js", async (importActual) => {
@@ -35,6 +36,7 @@ vi.mock("./configure.gateway-auth.js", () => ({
 
 vi.mock("../infra/tailscale.js", () => ({
   findTailscaleBinary: vi.fn(async () => undefined),
+  getTailnetHostname: mocks.getTailnetHostname,
 }));
 
 vi.mock("./onboard-helpers.js", async (importActual) => {
@@ -153,5 +155,70 @@ describe("promptGatewayConfig", () => {
     expect(result.config.gateway?.bind).toBe("loopback");
     expect(result.config.gateway?.tailscale?.mode).toBe("off");
     expect(result.config.gateway?.tailscale?.resetOnExit).toBe(false);
+  });
+
+  it("adds Tailscale origin to controlUi.allowedOrigins when tailscale serve is enabled", async () => {
+    mocks.getTailnetHostname.mockResolvedValue("my-host.tail1234.ts.net");
+    const { result } = await runGatewayPrompt({
+      // bind=loopback, auth=token, tailscale=serve
+      selectQueue: ["loopback", "token", "serve"],
+      textQueue: ["18789", "my-token"],
+      confirmResult: true,
+      authConfigFactory: ({ mode, token }) => ({ mode, token }),
+    });
+    expect(result.config.gateway?.controlUi?.allowedOrigins).toContain(
+      "https://my-host.tail1234.ts.net",
+    );
+  });
+
+  it("adds Tailscale origin to controlUi.allowedOrigins when tailscale funnel is enabled", async () => {
+    mocks.getTailnetHostname.mockResolvedValue("my-host.tail1234.ts.net");
+    const { result } = await runGatewayPrompt({
+      // bind=loopback, auth=password (funnel requires password), tailscale=funnel
+      selectQueue: ["loopback", "password", "funnel"],
+      textQueue: ["18789", "my-password"],
+      confirmResult: true,
+      authConfigFactory: ({ mode, password }) => ({ mode, password }),
+    });
+    expect(result.config.gateway?.controlUi?.allowedOrigins).toContain(
+      "https://my-host.tail1234.ts.net",
+    );
+  });
+
+  it("does not add Tailscale origin when getTailnetHostname fails", async () => {
+    mocks.getTailnetHostname.mockRejectedValue(new Error("not found"));
+    const { result } = await runGatewayPrompt({
+      selectQueue: ["loopback", "token", "serve"],
+      textQueue: ["18789", "my-token"],
+      confirmResult: true,
+      authConfigFactory: ({ mode, token }) => ({ mode, token }),
+    });
+    expect(result.config.gateway?.controlUi?.allowedOrigins).toBeUndefined();
+  });
+
+  it("does not duplicate Tailscale origin if already present", async () => {
+    mocks.getTailnetHostname.mockResolvedValue("my-host.tail1234.ts.net");
+    vi.clearAllMocks();
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.select.mockImplementation(async () => ["loopback", "token", "serve"].shift());
+    mocks.text.mockImplementation(async () => ["18789", "my-token"].shift());
+    mocks.randomToken.mockReturnValue("generated-token");
+    mocks.confirm.mockResolvedValue(true);
+    mocks.buildGatewayAuthConfig.mockImplementation((input) => input);
+    mocks.getTailnetHostname.mockResolvedValue("my-host.tail1234.ts.net");
+
+    const result = await promptGatewayConfig(
+      {
+        gateway: {
+          controlUi: {
+            allowedOrigins: ["https://my-host.tail1234.ts.net"],
+          },
+        },
+      },
+      makeRuntime(),
+    );
+    const origins = result.config.gateway?.controlUi?.allowedOrigins ?? [];
+    const tsOriginCount = origins.filter((o) => o === "https://my-host.tail1234.ts.net").length;
+    expect(tsOriginCount).toBe(1);
   });
 });

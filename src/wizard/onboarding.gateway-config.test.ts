@@ -5,6 +5,7 @@ import type { WizardPrompter, WizardSelectParams } from "./prompts.js";
 
 const mocks = vi.hoisted(() => ({
   randomToken: vi.fn(),
+  getTailnetHostname: vi.fn(),
 }));
 
 vi.mock("../commands/onboard-helpers.js", async (importActual) => {
@@ -17,6 +18,7 @@ vi.mock("../commands/onboard-helpers.js", async (importActual) => {
 
 vi.mock("../infra/tailscale.js", () => ({
   findTailscaleBinary: vi.fn(async () => undefined),
+  getTailnetHostname: mocks.getTailnetHostname,
 }));
 
 import { configureGatewayForOnboarding } from "./onboarding.gateway-config.js";
@@ -135,5 +137,53 @@ describe("configureGatewayForOnboarding", () => {
       "http://localhost:18789",
       "http://127.0.0.1:18789",
     ]);
+  });
+
+  it("adds Tailscale origin to controlUi.allowedOrigins when tailscale serve is enabled", async () => {
+    mocks.randomToken.mockReturnValue("generated-token");
+    mocks.getTailnetHostname.mockResolvedValue("my-host.tail1234.ts.net");
+
+    const prompter = createPrompter({
+      selectQueue: ["loopback", "token", "serve"],
+      textQueue: ["18789", undefined],
+    });
+    const runtime = createRuntime();
+
+    const result = await configureGatewayForOnboarding({
+      flow: "advanced",
+      baseConfig: {},
+      nextConfig: {},
+      localPort: 18789,
+      quickstartGateway: createQuickstartGateway("token"),
+      prompter,
+      runtime,
+    });
+
+    expect(result.nextConfig.gateway?.controlUi?.allowedOrigins).toContain(
+      "https://my-host.tail1234.ts.net",
+    );
+  });
+
+  it("does not add Tailscale origin when getTailnetHostname fails", async () => {
+    mocks.randomToken.mockReturnValue("generated-token");
+    mocks.getTailnetHostname.mockRejectedValue(new Error("not found"));
+
+    const prompter = createPrompter({
+      selectQueue: ["loopback", "token", "serve"],
+      textQueue: ["18789", undefined],
+    });
+    const runtime = createRuntime();
+
+    const result = await configureGatewayForOnboarding({
+      flow: "advanced",
+      baseConfig: {},
+      nextConfig: {},
+      localPort: 18789,
+      quickstartGateway: createQuickstartGateway("token"),
+      prompter,
+      runtime,
+    });
+
+    expect(result.nextConfig.gateway?.controlUi?.allowedOrigins).toBeUndefined();
   });
 });
