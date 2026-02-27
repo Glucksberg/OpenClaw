@@ -12,6 +12,7 @@ vi.mock("node:fs/promises", () => ({
 import {
   renderSystemNodeWarning,
   resolvePreferredNodePath,
+  resolveStableHomebrewNodePath,
   resolveSystemNodeInfo,
 } from "./runtime-paths.js";
 
@@ -139,6 +140,127 @@ describe("resolvePreferredNodePath", () => {
     });
 
     expect(result).toBeUndefined();
+  });
+
+  it("resolves Homebrew Cellar path to stable symlink (macOS)", async () => {
+    mockNodePathPresent(darwinNode);
+
+    const cellarPath = "/opt/homebrew/Cellar/node/25.5.0/bin/node";
+    const execFile = vi.fn().mockResolvedValue({ stdout: "25.5.0\n", stderr: "" });
+    const realpath = vi.fn().mockResolvedValue(cellarPath);
+
+    const result = await resolvePreferredNodePath({
+      env: {},
+      runtime: "node",
+      platform: "darwin",
+      execFile,
+      execPath: cellarPath,
+      realpath,
+    });
+
+    expect(result).toBe(darwinNode);
+  });
+
+  it("resolves Linuxbrew Cellar path to stable symlink", async () => {
+    const linuxbrewCellar = "/home/linuxbrew/.linuxbrew/Cellar/node/25.5.0/bin/node";
+    const linuxbrewStable = "/home/linuxbrew/.linuxbrew/bin/node";
+    const execFile = vi.fn().mockResolvedValue({ stdout: "25.5.0\n", stderr: "" });
+    const realpath = vi.fn().mockResolvedValue(linuxbrewCellar);
+
+    const result = await resolvePreferredNodePath({
+      env: {},
+      runtime: "node",
+      platform: "linux",
+      execFile,
+      execPath: linuxbrewCellar,
+      realpath,
+    });
+
+    expect(result).toBe(linuxbrewStable);
+  });
+
+  it("keeps Cellar path when stable symlink points elsewhere", async () => {
+    const cellarPath = "/opt/homebrew/Cellar/node/25.5.0/bin/node";
+    const differentCellar = "/opt/homebrew/Cellar/node/25.6.0/bin/node";
+    const execFile = vi.fn().mockResolvedValue({ stdout: "25.5.0\n", stderr: "" });
+    const realpath = vi.fn().mockImplementation(async (p: string) => {
+      if (p === "/opt/homebrew/bin/node") {
+        return differentCellar; // symlink points to a different version
+      }
+      return p;
+    });
+
+    const result = await resolvePreferredNodePath({
+      env: {},
+      runtime: "node",
+      platform: "darwin",
+      execFile,
+      execPath: cellarPath,
+      realpath,
+    });
+
+    // Falls back to the original Cellar path since symlink doesn't match.
+    expect(result).toBe(cellarPath);
+  });
+});
+
+describe("resolveStableHomebrewNodePath", () => {
+  it("returns stable symlink for macOS Homebrew Cellar path", async () => {
+    const cellarPath = "/opt/homebrew/Cellar/node/25.5.0/bin/node";
+    const realpath = vi.fn().mockResolvedValue(cellarPath);
+
+    const result = await resolveStableHomebrewNodePath(cellarPath, realpath);
+    expect(result).toBe("/opt/homebrew/bin/node");
+  });
+
+  it("returns stable symlink for Linuxbrew Cellar path", async () => {
+    const cellarPath = "/home/linuxbrew/.linuxbrew/Cellar/node/25.5.0/bin/node";
+    const realpath = vi.fn().mockResolvedValue(cellarPath);
+
+    const result = await resolveStableHomebrewNodePath(cellarPath, realpath);
+    expect(result).toBe("/home/linuxbrew/.linuxbrew/bin/node");
+  });
+
+  it("returns stable symlink for /usr/local/Cellar (macOS x86 Homebrew)", async () => {
+    const cellarPath = "/usr/local/Cellar/node/25.5.0/bin/node";
+    const realpath = vi.fn().mockResolvedValue(cellarPath);
+
+    const result = await resolveStableHomebrewNodePath(cellarPath, realpath);
+    expect(result).toBe("/usr/local/bin/node");
+  });
+
+  it("returns null for non-Cellar paths", async () => {
+    const fnmPath = "/Users/test/.fnm/node-versions/v24.11.1/installation/bin/node";
+    const realpath = vi.fn().mockResolvedValue(fnmPath);
+
+    const result = await resolveStableHomebrewNodePath(fnmPath, realpath);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when stable symlink points to different version", async () => {
+    const cellarPath = "/opt/homebrew/Cellar/node/25.5.0/bin/node";
+    const realpath = vi.fn().mockImplementation(async (p: string) => {
+      if (p === "/opt/homebrew/bin/node") {
+        return "/opt/homebrew/Cellar/node/25.6.0/bin/node";
+      }
+      return p;
+    });
+
+    const result = await resolveStableHomebrewNodePath(cellarPath, realpath);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when stable symlink is broken", async () => {
+    const cellarPath = "/opt/homebrew/Cellar/node/25.5.0/bin/node";
+    const realpath = vi.fn().mockImplementation(async (p: string) => {
+      if (p === "/opt/homebrew/bin/node") {
+        throw new Error("ENOENT");
+      }
+      return p;
+    });
+
+    const result = await resolveStableHomebrewNodePath(cellarPath, realpath);
+    expect(result).toBeNull();
   });
 });
 

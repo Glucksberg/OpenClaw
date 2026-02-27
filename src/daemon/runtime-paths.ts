@@ -15,6 +15,12 @@ const VERSION_MANAGER_MARKERS = [
   "/nvs/",
 ];
 
+// Matches Homebrew Cellar paths like /opt/homebrew/Cellar/node/25.5.0/bin/node
+// or /home/linuxbrew/.linuxbrew/Cellar/node/25.5.0/bin/node. These versioned
+// paths break when Homebrew upgrades Node because the old Cellar directory is
+// removed. We detect this pattern and resolve to the stable symlink instead.
+const HOMEBREW_CELLAR_RE = /^(.+)\/Cellar\/node\/[^/]+\/bin\/node$/;
+
 function getPathModule(platform: NodeJS.Platform) {
   return platform === "win32" ? path.win32 : path.posix;
 }
@@ -153,12 +159,41 @@ export function renderSystemNodeWarning(
   return `System Node ${versionLabel} at ${systemNode.path} is below the required Node 22+.${selectedLabel} Install Node 22+ from nodejs.org or Homebrew.`;
 }
 
+/**
+ * If `execPath` is a Homebrew Cellar path (versioned), return the stable
+ * symlink path (e.g. `/opt/homebrew/bin/node`). Returns `null` when the
+ * path is not a Cellar path or the stable symlink does not exist.
+ */
+export async function resolveStableHomebrewNodePath(
+  execPath: string,
+  realpathImpl: (p: string) => Promise<string> = (p) => fs.realpath(p),
+): Promise<string | null> {
+  const match = execPath.match(HOMEBREW_CELLAR_RE);
+  if (!match) {
+    return null;
+  }
+  const prefix = match[1]; // e.g. /opt/homebrew
+  const stablePath = `${prefix}/bin/node`;
+  try {
+    // Verify the symlink resolves to the same binary.
+    const stableReal = await realpathImpl(stablePath);
+    const execReal = await realpathImpl(execPath);
+    if (stableReal === execReal) {
+      return stablePath;
+    }
+  } catch {
+    // Symlink missing or broken; fall through.
+  }
+  return null;
+}
+
 export async function resolvePreferredNodePath(params: {
   env?: Record<string, string | undefined>;
   runtime?: string;
   platform?: NodeJS.Platform;
   execFile?: ExecFileAsync;
   execPath?: string;
+  realpath?: (p: string) => Promise<string>;
 }): Promise<string | undefined> {
   if (params.runtime !== "node") {
     return undefined;
@@ -172,7 +207,10 @@ export async function resolvePreferredNodePath(params: {
     const execFileImpl = params.execFile ?? execFileAsync;
     const version = await resolveNodeVersion(currentExecPath, execFileImpl);
     if (isSupportedNodeVersion(version)) {
-      return currentExecPath;
+      // On Homebrew, process.execPath resolves to a versioned Cellar path
+      // that breaks after a Node upgrade. Use the stable symlink instead.
+      const stablePath = await resolveStableHomebrewNodePath(currentExecPath, params.realpath);
+      return stablePath ?? currentExecPath;
     }
   }
 
