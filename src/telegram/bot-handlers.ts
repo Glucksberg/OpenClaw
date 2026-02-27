@@ -555,8 +555,11 @@ export const registerTelegramHandlers = ({
         return true;
       }
       if (policyAccess.reason === "group-policy-allowlist-empty") {
-        logVerbose(
-          "Blocked telegram group message (groupPolicy: allowlist, no group allowlist entries)",
+        // Warn (not verbose) so users notice when allowlist has no allowFrom entries (#27552).
+        logger.warn(
+          { chatId, title: chatTitle, reason: "allowlist-empty" },
+          "Blocked group message: groupPolicy is 'allowlist' but no allowFrom entries are configured. " +
+            'Add allowFrom: ["*"] to allow all senders, or specify allowed user IDs.',
         );
         return true;
       }
