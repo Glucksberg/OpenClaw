@@ -83,4 +83,40 @@ describe("config compaction settings", () => {
       },
     );
   });
+
+  it("preserves auditReads: false", async () => {
+    await withTempHomeConfig(
+      {
+        agents: {
+          defaults: {
+            compaction: {
+              auditReads: false,
+            },
+          },
+        },
+      },
+      async () => {
+        const cfg = loadConfig();
+        expect(cfg.agents?.defaults?.compaction?.auditReads).toBe(false);
+      },
+    );
+  });
+
+  it("defaults auditReads to undefined (treated as true)", async () => {
+    await withTempHomeConfig(
+      {
+        agents: {
+          defaults: {
+            compaction: {
+              reserveTokensFloor: 9000,
+            },
+          },
+        },
+      },
+      async () => {
+        const cfg = loadConfig();
+        expect(cfg.agents?.defaults?.compaction?.auditReads).toBeUndefined();
+      },
+    );
+  });
 });
