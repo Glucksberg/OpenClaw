@@ -18,7 +18,6 @@ import { buildChannelAccountBindings } from "../../routing/bindings.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import { type GatewayClientMode, type GatewayClientName } from "../../utils/message-channel.js";
 import { throwIfAborted } from "./abort.js";
-import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
 import {
   listConfiguredMessageChannels,
   resolveMessageChannelSelection,
@@ -48,6 +47,7 @@ import {
 import { executePollAction, executeSendAction } from "./outbound-send-service.js";
 import { ensureOutboundSessionEntry, resolveOutboundSessionRoute } from "./outbound-session.js";
 import { resolveChannelTarget, type ResolvedMessagingTarget } from "./target-resolver.js";
+import { resolveOutboundTarget } from "./targets.js";
 import { extractToolPayload } from "./tool-payload.js";
 
 export type MessageActionRunnerGateway = {
@@ -103,12 +103,21 @@ const ALLOWLIST_GUARDED_ACTIONS = new Set<ChannelMessageActionName>([
   "sticker",
 ]);
 
+/** Mask a target identifier for error messages to avoid leaking PII (e.g. phone numbers). */
+function redactTarget(to: string): string {
+  // If it looks like a phone number (starts with + and has 7+ digits), mask all but last 4
+  const digits = to.replace(/\D/g, "");
+  if (/^\+?\d{7,}/.test(to) && digits.length >= 7) {
+    return `***${digits.slice(-4)}`;
+  }
+  return to;
+}
+
 /**
  * Enforce the channel's outbound allowlist on the resolved target.
  *
- * Uses the same plugin allowFrom + resolveTarget mechanism that the
- * CLI/heartbeat delivery path uses (via `resolveOutboundTarget`), so the
- * behaviour stays consistent across all send surfaces.
+ * Delegates to `resolveOutboundTarget` (the same path the CLI/heartbeat
+ * delivery uses) so the behaviour stays consistent across all send surfaces.
  */
 function enforceOutboundAllowlist(params: {
   cfg: OpenClawConfig;
@@ -121,41 +130,18 @@ function enforceOutboundAllowlist(params: {
     return;
   }
 
-  const plugin = resolveOutboundChannelPlugin({
+  const result = resolveOutboundTarget({
     channel: params.channel,
-    cfg: params.cfg,
-  });
-  if (!plugin) {
-    return;
-  }
-
-  const resolveAllowFrom = plugin.config.resolveAllowFrom;
-  const resolveTarget = plugin.outbound?.resolveTarget;
-  if (!resolveAllowFrom || !resolveTarget) {
-    // Channel has no allowlist enforcement capability — nothing to check.
-    return;
-  }
-
-  const allowFromRaw = resolveAllowFrom({
-    cfg: params.cfg,
-    accountId: params.accountId ?? undefined,
-  });
-  if (!allowFromRaw || allowFromRaw.length === 0) {
-    // No allowlist configured — open access.
-    return;
-  }
-
-  const allowFrom = allowFromRaw.map((entry) => String(entry));
-  const result = resolveTarget({
-    cfg: params.cfg,
     to: params.to,
-    allowFrom,
-    accountId: params.accountId ?? undefined,
+    cfg: params.cfg,
+    accountId: params.accountId,
     mode: "explicit",
   });
+
   if (!result.ok) {
+    const masked = redactTarget(params.to);
     throw new Error(
-      `Target not in allowlist. The message tool cannot send to "${params.to}" on ${params.channel} because it is not in the configured allowFrom list.`,
+      `Target not in allowlist. The message tool cannot send to "${masked}" on ${params.channel} because it is not in the configured allowFrom list.`,
     );
   }
 }
