@@ -151,6 +151,10 @@ function extractMessageText(message: MessageEvent["message"]): string {
     }
     return `[Sent a ${packageName} sticker]`;
   }
+  if (message.type === "file") {
+    const fileName = (message as unknown as { fileName?: string }).fileName;
+    return fileName ? `[Sent file: ${fileName}]` : "";
+  }
   return "";
 }
 
@@ -162,8 +166,10 @@ function extractMediaPlaceholder(message: MessageEvent["message"]): string {
       return "<media:video>";
     case "audio":
       return "<media:audio>";
-    case "file":
-      return "<media:document>";
+    case "file": {
+      const fileName = (message as unknown as { fileName?: string }).fileName;
+      return fileName ? `<media:document:${fileName}>` : "<media:document>";
+    }
     default:
       return "";
   }

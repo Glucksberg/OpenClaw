@@ -110,4 +110,64 @@ describe("buildLineMessageContext", () => {
     expect(context?.ctxPayload.OriginatingTo).toBe("line:room:room-1");
     expect(context?.ctxPayload.To).toBe("line:room:room-1");
   });
+
+  it("builds context for file messages with filename and media ref", async () => {
+    const event = createMessageEvent(
+      { type: "user", userId: "user-file" },
+      {
+        message: {
+          id: "file-1",
+          type: "file",
+          fileName: "report.pdf",
+          fileSize: "12345",
+        } as unknown as MessageEvent["message"],
+      },
+    );
+
+    const context = await buildLineMessageContext({
+      event,
+      allMedia: [{ path: "/tmp/line-media-abc.pdf", contentType: "application/pdf" }],
+      cfg,
+      account,
+    });
+
+    expect(context).not.toBeNull();
+    if (!context) {
+      throw new Error("context missing");
+    }
+
+    // Should include filename in body
+    expect(context.ctxPayload.Body).toContain("report.pdf");
+    // Should include media path
+    expect(context.ctxPayload.MediaUrl).toBe("/tmp/line-media-abc.pdf");
+  });
+
+  it("builds context for file messages without media (download failed)", async () => {
+    const event = createMessageEvent(
+      { type: "user", userId: "user-file-2" },
+      {
+        message: {
+          id: "file-2",
+          type: "file",
+          fileName: "data.xlsx",
+          fileSize: "999",
+        } as unknown as MessageEvent["message"],
+      },
+    );
+
+    const context = await buildLineMessageContext({
+      event,
+      allMedia: [],
+      cfg,
+      account,
+    });
+
+    expect(context).not.toBeNull();
+    if (!context) {
+      throw new Error("context missing");
+    }
+
+    // Should still have body from extractMessageText (filename)
+    expect(context.ctxPayload.Body).toContain("data.xlsx");
+  });
 });
