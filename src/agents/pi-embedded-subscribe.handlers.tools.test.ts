@@ -306,6 +306,87 @@ describe("messaging tool media URL tracking", () => {
     expect(ctx.state.messagingToolSentMediaUrls).not.toContain("file:///img-0.jpg");
   });
 
+  it("tracks tts tool result media for deduplication", async () => {
+    const { ctx } = createTestContext();
+
+    const startEvt: ToolExecutionStartEvent = {
+      type: "tool_execution_start",
+      toolName: "tts",
+      toolCallId: "tool-tts-1",
+      args: { text: "Hello world" },
+    };
+    await handleToolExecutionStart(ctx, startEvt);
+
+    const endEvt: ToolExecutionEndEvent = {
+      type: "tool_execution_end",
+      toolName: "tts",
+      toolCallId: "tool-tts-1",
+      isError: false,
+      result: {
+        content: [{ type: "text", text: "[[audio_as_voice]]\nMEDIA:/tmp/tts-audio.ogg" }],
+        details: { audioPath: "/tmp/tts-audio.ogg", provider: "openai" },
+      },
+    };
+    await handleToolExecutionEnd(ctx, endEvt);
+
+    expect(ctx.state.messagingToolSentMediaUrls).toContain("/tmp/tts-audio.ogg");
+  });
+
+  it("does not track non-messaging tool media on error", async () => {
+    const { ctx } = createTestContext();
+
+    const startEvt: ToolExecutionStartEvent = {
+      type: "tool_execution_start",
+      toolName: "tts",
+      toolCallId: "tool-tts-err",
+      args: { text: "Hello world" },
+    };
+    await handleToolExecutionStart(ctx, startEvt);
+
+    const endEvt: ToolExecutionEndEvent = {
+      type: "tool_execution_end",
+      toolName: "tts",
+      toolCallId: "tool-tts-err",
+      isError: true,
+      result: {
+        content: [{ type: "text", text: "MEDIA:/tmp/tts-audio.ogg" }],
+        details: { error: "TTS failed" },
+      },
+    };
+    await handleToolExecutionEnd(ctx, endEvt);
+
+    expect(ctx.state.messagingToolSentMediaUrls).toHaveLength(0);
+  });
+
+  it("tracks browser tool MEDIA: result for deduplication", async () => {
+    const { ctx } = createTestContext();
+
+    const startEvt: ToolExecutionStartEvent = {
+      type: "tool_execution_start",
+      toolName: "browser",
+      toolCallId: "tool-br-1",
+      args: { action: "screenshot" },
+    };
+    await handleToolExecutionStart(ctx, startEvt);
+
+    const endEvt: ToolExecutionEndEvent = {
+      type: "tool_execution_end",
+      toolName: "browser",
+      toolCallId: "tool-br-1",
+      isError: false,
+      result: {
+        content: [
+          { type: "text", text: "MEDIA:/tmp/screenshot.png" },
+          { type: "image", data: "base64", mimeType: "image/png" },
+        ],
+        details: { path: "/tmp/screenshot.png" },
+      },
+    };
+    await handleToolExecutionEnd(ctx, endEvt);
+
+    expect(ctx.state.messagingToolSentMediaUrls).toContain("/tmp/screenshot.png");
+  });
+
   it("discards pending media URL on tool error", async () => {
     const { ctx } = createTestContext();
 
