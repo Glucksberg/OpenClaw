@@ -664,6 +664,7 @@ async function agentCommandInternal(
     );
     let provider = defaultProvider;
     let model = defaultModel;
+    let providerExplicit = false;
     const hasAllowlist = agentCfg?.models && Object.keys(agentCfg.models).length > 0;
     const hasStoredOverride = Boolean(
       sessionEntry?.modelOverride || sessionEntry?.providerOverride,
@@ -730,6 +731,7 @@ async function agentCommandInternal(
       ) {
         provider = normalizedStored.provider;
         model = normalizedStored.model;
+        providerExplicit = !!storedProviderOverride;
       }
     }
     if (sessionEntry) {
@@ -839,6 +841,7 @@ async function agentCommandInternal(
         provider,
         model,
         agentDir,
+        providerExplicit,
         fallbacksOverride: effectiveFallbacksOverride,
         run: (providerOverride, modelOverride) => {
           const isFallbackRetry = fallbackAttemptIndex > 0;

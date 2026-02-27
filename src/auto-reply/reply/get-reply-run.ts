@@ -497,6 +497,7 @@ export async function runPreparedReply(
       skillsSnapshot,
       provider,
       model,
+      providerExplicit: !!sessionEntry?.providerOverride?.trim(),
       authProfileId,
       authProfileIdSource,
       thinkLevel: resolvedThinkLevel,

@@ -247,6 +247,9 @@ function resolveFallbackCandidates(params: {
   model: string;
   /** Optional explicit fallbacks list; when provided (even empty), replaces agents.defaults.model.fallbacks. */
   fallbacksOverride?: string[];
+  /** When true, the provider was explicitly chosen by the user (e.g. "openai/gpt-5.3-codex")
+   * and automatic provider remapping (openai -> openai-codex) should be skipped (#22819). */
+  providerExplicit?: boolean;
 }): ModelCandidate[] {
   const primary = params.cfg
     ? resolveConfiguredModelRef({
@@ -259,7 +262,9 @@ function resolveFallbackCandidates(params: {
   const defaultModel = primary?.model ?? DEFAULT_MODEL;
   const providerRaw = String(params.provider ?? "").trim() || defaultProvider;
   const modelRaw = String(params.model ?? "").trim() || defaultModel;
-  const normalizedPrimary = normalizeModelRef(providerRaw, modelRaw);
+  const normalizedPrimary = normalizeModelRef(providerRaw, modelRaw, {
+    providerExplicit: params.providerExplicit,
+  });
   const configuredPrimary = normalizeModelRef(defaultProvider, defaultModel);
   const aliasIndex = buildModelAliasIndex({
     cfg: params.cfg ?? {},
@@ -439,6 +444,9 @@ export async function runWithModelFallback<T>(params: {
   agentDir?: string;
   /** Optional explicit fallbacks list; when provided (even empty), replaces agents.defaults.model.fallbacks. */
   fallbacksOverride?: string[];
+  /** When true, the provider was explicitly chosen by the user and automatic
+   * provider remapping (e.g. openai -> openai-codex) should be skipped (#22819). */
+  providerExplicit?: boolean;
   run: (provider: string, model: string) => Promise<T>;
   onError?: ModelFallbackErrorHandler;
 }): Promise<ModelFallbackRunResult<T>> {
@@ -447,6 +455,7 @@ export async function runWithModelFallback<T>(params: {
     provider: params.provider,
     model: params.model,
     fallbacksOverride: params.fallbacksOverride,
+    providerExplicit: params.providerExplicit,
   });
   const authStore = params.cfg
     ? ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false })

@@ -190,6 +190,25 @@ describe("runWithModelFallback", () => {
     expect(run).toHaveBeenCalledWith("openai", "gpt-5.3-codex");
   });
 
+  it("skips openai-codex remap when providerExplicit is true (#22819)", async () => {
+    const cfg = makeCfg();
+    const run = vi.fn().mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "openai",
+      model: "gpt-5.3-codex",
+      providerExplicit: true,
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(run).toHaveBeenCalledTimes(1);
+    // When provider is explicitly specified, the model should stay on "openai"
+    // (not be remapped to "openai-codex") so the user's custom baseUrl is used.
+    expect(run).toHaveBeenCalledWith("openai", "gpt-5.3-codex");
+  });
+
   it("falls back on unrecognized errors when candidates remain", async () => {
     const cfg = makeCfg();
     const run = vi.fn().mockRejectedValueOnce(new Error("bad request")).mockResolvedValueOnce("ok");

@@ -62,6 +62,9 @@ export type FollowupRun = {
     skillsSnapshot?: SkillSnapshot;
     provider: string;
     model: string;
+    /** When true, the provider was explicitly chosen by the user and automatic
+     * provider remapping (e.g. openai -> openai-codex) should be skipped (#22819). */
+    providerExplicit?: boolean;
     authProfileId?: string;
     authProfileIdSource?: "auto" | "user";
     thinkLevel?: ThinkLevel;
