@@ -409,6 +409,102 @@ export type RedactionResult = {
 };
 
 /**
+ * Patterns that indicate an obvious placeholder/example secret value.
+ * Matched case-insensitively against string values at sensitive config paths.
+ *
+ * Covers the most common forms seen in documentation examples and redacted
+ * template payloads (e.g. xoxb-REDACTED, xapp-REPLACE_ME, your-token-here).
+ */
+const PLACEHOLDER_SECRET_PATTERNS: RegExp[] = [
+  // OpenClaw redaction sentinel (shouldn't remain after restoreRedactedValues, but guard anyway)
+  /^__OPENCLAW_REDACTED__$/,
+  // Bare REDACTED or with common Slack-style prefix (xoxb-REDACTED, xapp-REDACTED, etc.)
+  /^(?:[a-z]+-)*REDACTED$/i,
+  // REPLACE_ME variants (xoxb-REPLACE_ME, xapp-REPLACE_ME, plain REPLACE_ME)
+  /^(?:[a-z]+-)*REPLACE_ME$/i,
+  // Docs/template placeholders: your-token, your-password, your-api-key, your-secret, etc.
+  /^your-[a-z][\w-]*$/i,
+  // paste-your-* variants (paste-your-key, paste-your-token)
+  /^paste-your-[a-z][\w-]*$/i,
+  // sk-xxx / sk-yyy style dummy keys used in documentation
+  /^sk-x{2,}$/i,
+];
+
+function isPlaceholderSecretValue(value: string): boolean {
+  const trimmed = value.trim();
+  return PLACEHOLDER_SECRET_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+/**
+ * Deep-walk `config` and collect the first sensitive path that contains an
+ * obvious placeholder secret value (e.g. "REDACTED", "your-token", etc.).
+ * Returns `null` when no placeholder is found.
+ */
+function findPlaceholderSecretPath(
+  obj: unknown,
+  prefix: string,
+  hints: ConfigUiHints | undefined,
+): string | null {
+  if (obj === null || obj === undefined || typeof obj !== "object") {
+    return null;
+  }
+  if (Array.isArray(obj)) {
+    const path = `${prefix}[]`;
+    for (const item of obj) {
+      if (typeof item === "string" && isSensitivePath(path) && isPlaceholderSecretValue(item)) {
+        return path;
+      }
+      const nested = findPlaceholderSecretPath(item, path, hints);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const wildcardPath = prefix ? `${prefix}.*` : "*";
+    // Determine whether this path is sensitive via hints (preferred) or pattern guessing
+    const hintSensitive =
+      hints && (hints[path]?.sensitive === true || hints[wildcardPath]?.sensitive === true);
+    const guessSensitive = !hintSensitive && isSensitivePath(path);
+    const sensitive = hintSensitive || guessSensitive;
+    if (sensitive && typeof value === "string" && isPlaceholderSecretValue(value)) {
+      return path;
+    }
+    const nested = findPlaceholderSecretPath(value, path, hints);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+/**
+ * Guard called by config.apply and config.patch before writing to disk.
+ *
+ * Returns `{ ok: false, humanReadableMessage }` if any sensitive config path
+ * contains an obvious placeholder value (e.g. "REDACTED", "your-token",
+ * "xoxb-REPLACE_ME"). This prevents redacted template payloads from silently
+ * overwriting real production credentials.
+ *
+ * Returns `{ ok: true }` when no placeholder is detected.
+ */
+export function rejectPlaceholderSecrets(
+  config: unknown,
+  hints?: ConfigUiHints,
+): Pick<RedactionResult, "ok" | "humanReadableMessage"> {
+  const badPath = findPlaceholderSecretPath(config, "", hints);
+  if (badPath) {
+    return {
+      ok: false,
+      humanReadableMessage: `Placeholder secret detected at "${badPath}": use a real value, an env-var reference like \${ENV_VAR}, or retain the existing value via config.patch`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
  * Deep-walk `incoming` and replace any {@link REDACTED_SENTINEL} values
  * (on sensitive paths) with the corresponding value from `original`.
  *

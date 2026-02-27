@@ -15,6 +15,7 @@ import { applyMergePatch } from "../../config/merge-patch.js";
 import {
   redactConfigObject,
   redactConfigSnapshot,
+  rejectPlaceholderSecrets,
   restoreRedactedValues,
 } from "../../config/redact-snapshot.js";
 import { buildConfigSchema, type ConfigSchemaResponse } from "../../config/schema.js";
@@ -135,6 +136,20 @@ function parseValidateConfigFromRawOrRespond(
       false,
       undefined,
       errorShape(ErrorCodes.INVALID_REQUEST, restored.humanReadableMessage ?? "invalid config"),
+    );
+    return null;
+  }
+  // Guard: reject obvious placeholder/example secrets before writing to disk.
+  // This prevents redacted template payloads from silently overwriting real credentials.
+  const placeholderCheck = rejectPlaceholderSecrets(restored.result, schema.uiHints);
+  if (!placeholderCheck.ok) {
+    respond(
+      false,
+      undefined,
+      errorShape(
+        ErrorCodes.INVALID_REQUEST,
+        placeholderCheck.humanReadableMessage ?? "placeholder secret in config",
+      ),
     );
     return null;
   }
@@ -338,6 +353,23 @@ export const configHandlers: GatewayRequestHandlers = {
         errorShape(
           ErrorCodes.INVALID_REQUEST,
           restoredMerge.humanReadableMessage ?? "invalid config",
+        ),
+      );
+      return;
+    }
+    // Guard: reject obvious placeholder/example secrets before writing to disk.
+    // This prevents redacted template payloads from silently overwriting real credentials.
+    const placeholderCheckPatch = rejectPlaceholderSecrets(
+      restoredMerge.result,
+      schemaPatch.uiHints,
+    );
+    if (!placeholderCheckPatch.ok) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          placeholderCheckPatch.humanReadableMessage ?? "placeholder secret in config",
         ),
       );
       return;
