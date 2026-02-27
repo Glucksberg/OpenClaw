@@ -416,6 +416,30 @@ describe("handleDiscordGuildAction - channel management", () => {
     });
   });
 
+  it("coerces string booleans for archived and locked", async () => {
+    await handleDiscordGuildAction(
+      "channelEdit",
+      {
+        channelId: "C1",
+        archived: "true",
+        locked: "false",
+      } as unknown as Record<string, unknown>,
+      channelsEnabled,
+    );
+    expect(editChannelDiscord).toHaveBeenCalledWith({
+      channelId: "C1",
+      name: undefined,
+      topic: undefined,
+      position: undefined,
+      parentId: undefined,
+      nsfw: undefined,
+      rateLimitPerUser: undefined,
+      archived: true,
+      locked: false,
+      autoArchiveDuration: undefined,
+    });
+  });
+
   it.each([
     ["parentId is null", { parentId: null }],
     ["clearParent is true", { clearParent: true }],

@@ -25,6 +25,7 @@ import {
   type ActionGate,
   jsonResult,
   parseAvailableTags,
+  readBooleanParam,
   readNumberParam,
   readStringArrayParam,
   readStringParam,
@@ -281,7 +282,7 @@ export async function handleDiscordGuildAction(
       const parentId = readDiscordParentIdParam(params);
       const topic = readStringParam(params, "topic");
       const position = readNumberParam(params, "position", { integer: true });
-      const nsfw = params.nsfw as boolean | undefined;
+      const nsfw = readBooleanParam(params, "nsfw");
       const channel = accountId
         ? await createChannelDiscord(
             {
@@ -316,13 +317,13 @@ export async function handleDiscordGuildAction(
       const name = readStringParam(params, "name");
       const topic = readStringParam(params, "topic");
       const position = readNumberParam(params, "position", { integer: true });
-      const parentId = readDiscordParentIdParam(params);
-      const nsfw = params.nsfw as boolean | undefined;
+      const parentId = readParentIdParam(params);
+      const nsfw = readBooleanParam(params, "nsfw");
       const rateLimitPerUser = readNumberParam(params, "rateLimitPerUser", {
         integer: true,
       });
-      const archived = typeof params.archived === "boolean" ? params.archived : undefined;
-      const locked = typeof params.locked === "boolean" ? params.locked : undefined;
+      const archived = readBooleanParam(params, "archived");
+      const locked = readBooleanParam(params, "locked");
       const autoArchiveDuration = readNumberParam(params, "autoArchiveDuration", {
         integer: true,
       });

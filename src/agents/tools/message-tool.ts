@@ -384,6 +384,13 @@ function buildChannelManagementSchema() {
     position: Type.Optional(Type.Number()),
     nsfw: Type.Optional(Type.Boolean()),
     rateLimitPerUser: Type.Optional(Type.Number()),
+    archived: Type.Optional(Type.Boolean({ description: "Archive or unarchive a thread." })),
+    locked: Type.Optional(Type.Boolean({ description: "Lock or unlock a thread." })),
+    autoArchiveDuration: Type.Optional(
+      Type.Number({
+        description: "Auto-archive duration in minutes (60, 1440, 4320, 10080).",
+      }),
+    ),
     categoryId: Type.Optional(Type.String()),
     clearParent: Type.Optional(
       Type.Boolean({

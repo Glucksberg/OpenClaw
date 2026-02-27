@@ -31,6 +31,7 @@ import { assertMediaNotDataUrl } from "../sandbox-paths.js";
 import {
   type ActionGate,
   jsonResult,
+  readBooleanParam,
   readReactionParams,
   readStringArrayParam,
   readStringParam,
@@ -398,8 +399,7 @@ export async function handleDiscordMessagingAction(
         required: true,
       });
       const channelId = readStringParam(params, "channelId");
-      const includeArchived =
-        typeof params.includeArchived === "boolean" ? params.includeArchived : undefined;
+      const includeArchived = readBooleanParam(params, "includeArchived");
       const before = readStringParam(params, "before");
       const limit =
         typeof params.limit === "number" && Number.isFinite(params.limit)

@@ -1,6 +1,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import {
   parseAvailableTags,
+  readBooleanParam,
   readNumberParam,
   readStringArrayParam,
   readStringParam,
@@ -160,7 +161,7 @@ export async function tryHandleDiscordMessageActionGuildAdmin(params: {
     const position = readNumberParam(actionParams, "position", {
       integer: true,
     });
-    const nsfw = typeof actionParams.nsfw === "boolean" ? actionParams.nsfw : undefined;
+    const nsfw = readBooleanParam(actionParams, "nsfw");
     return await handleDiscordAction(
       {
         action: "channelCreate",
@@ -187,12 +188,12 @@ export async function tryHandleDiscordMessageActionGuildAdmin(params: {
       integer: true,
     });
     const parentId = readParentIdParam(actionParams);
-    const nsfw = typeof actionParams.nsfw === "boolean" ? actionParams.nsfw : undefined;
+    const nsfw = readBooleanParam(actionParams, "nsfw");
     const rateLimitPerUser = readNumberParam(actionParams, "rateLimitPerUser", {
       integer: true,
     });
-    const archived = typeof actionParams.archived === "boolean" ? actionParams.archived : undefined;
-    const locked = typeof actionParams.locked === "boolean" ? actionParams.locked : undefined;
+    const archived = readBooleanParam(actionParams, "archived");
+    const locked = readBooleanParam(actionParams, "locked");
     const autoArchiveDuration = readNumberParam(actionParams, "autoArchiveDuration", {
       integer: true,
     });
@@ -383,8 +384,7 @@ export async function tryHandleDiscordMessageActionGuildAdmin(params: {
       required: true,
     });
     const channelId = readStringParam(actionParams, "channelId");
-    const includeArchived =
-      typeof actionParams.includeArchived === "boolean" ? actionParams.includeArchived : undefined;
+    const includeArchived = readBooleanParam(actionParams, "includeArchived");
     const before = readStringParam(actionParams, "before");
     const limit = readNumberParam(actionParams, "limit", { integer: true });
     return await handleDiscordAction(
