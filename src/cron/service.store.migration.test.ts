@@ -178,4 +178,58 @@ describe("cron store migration", () => {
     expect(schedule.kind).toBe("cron");
     expect(schedule.staggerMs).toBeUndefined();
   });
+
+  it("normalizes jobId to id so both field names work in jobs.json (#26564)", async () => {
+    const store = await makeStorePath();
+    try {
+      // Write a store using "jobId" instead of "id" (the documented alias).
+      await writeLegacyStore(store.storePath, {
+        jobId: "reminder-abc",
+        name: "Morning reminder",
+        enabled: true,
+        createdAtMs: 1_700_000_000_000,
+        updatedAtMs: 1_700_000_000_000,
+        schedule: { kind: "cron", expr: "0 8 * * *", tz: "UTC" },
+        sessionTarget: "isolated",
+        wakeMode: "now",
+        payload: { kind: "agentTurn", message: "Good morning" },
+        delivery: { mode: "none" },
+        state: {},
+      });
+
+      const migrated = await migrateAndLoadFirstJob(store.storePath);
+
+      // "jobId" should be normalized to "id"
+      expect(migrated.id).toBe("reminder-abc");
+      expect("jobId" in migrated).toBe(false);
+    } finally {
+      await store.cleanup();
+    }
+  });
+
+  it("prefers existing id over jobId when both are present", async () => {
+    const store = await makeStorePath();
+    try {
+      await writeLegacyStore(store.storePath, {
+        id: "canonical-id",
+        jobId: "stale-alias",
+        name: "Both fields",
+        enabled: true,
+        createdAtMs: 1_700_000_000_000,
+        updatedAtMs: 1_700_000_000_000,
+        schedule: { kind: "cron", expr: "0 9 * * *", tz: "UTC" },
+        sessionTarget: "main",
+        wakeMode: "next-heartbeat",
+        payload: { kind: "systemEvent", text: "tick" },
+        state: {},
+      });
+
+      const migrated = await migrateAndLoadFirstJob(store.storePath);
+
+      // "id" takes precedence; "jobId" is left alone (not overwritten).
+      expect(migrated.id).toBe("canonical-id");
+    } finally {
+      await store.cleanup();
+    }
+  });
 });
