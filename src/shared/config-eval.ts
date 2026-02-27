@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export function isTruthy(value: unknown): boolean {
@@ -149,6 +150,28 @@ let cachedHasBinaryPath: string | undefined;
 let cachedHasBinaryPathExt: string | undefined;
 const hasBinaryCache = new Map<string, boolean>();
 
+/**
+ * Well-known binary directories to probe when PATH doesn't contain the binary.
+ * Covers Homebrew (macOS ARM + Intel), common Linux paths, and user-local installs.
+ * This handles environments where PATH is minimal (launchd, cron, gateway-as-service).
+ */
+function wellKnownBinDirs(): string[] {
+  const home = os.homedir();
+  return [
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+    path.join(home, ".local", "bin"),
+    path.join(home, ".local", "share", "pnpm"),
+    path.join(home, ".bun", "bin"),
+    "/usr/bin",
+    "/usr/sbin",
+    "/bin",
+    "/sbin",
+  ];
+}
+
 export function hasBinary(bin: string): boolean {
   const pathEnv = process.env.PATH ?? "";
   const pathExt = process.platform === "win32" ? (process.env.PATHEXT ?? "") : "";
@@ -161,8 +184,23 @@ export function hasBinary(bin: string): boolean {
     return hasBinaryCache.get(bin)!;
   }
 
-  const parts = pathEnv.split(path.delimiter).filter(Boolean);
+  const pathParts = pathEnv.split(path.delimiter).filter(Boolean);
   const extensions = process.platform === "win32" ? windowsPathExtensions() : [""];
+
+  // Merge PATH entries with well-known fallback directories (non-Windows only).
+  // This ensures binaries installed via Homebrew or user-local managers are found
+  // even when the gateway runs under launchd/minimal PATH environments.
+  const seen = new Set(pathParts);
+  const parts = [...pathParts];
+  if (process.platform !== "win32") {
+    for (const dir of wellKnownBinDirs()) {
+      if (!seen.has(dir)) {
+        seen.add(dir);
+        parts.push(dir);
+      }
+    }
+  }
+
   for (const part of parts) {
     for (const ext of extensions) {
       const candidate = path.join(part, bin + ext);
