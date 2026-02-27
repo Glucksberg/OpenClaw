@@ -347,6 +347,22 @@
   transform: rotate(-90deg);
 }
 
+/* Highlight section label when collapsed but contains the active tab */
+.nav-group--collapsed.nav-group--has-active .nav-label {
+  color: var(--text-strong);
+}
+
+.nav-group--collapsed.nav-group--has-active .nav-label__text::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* Nav items */
 .nav-item {
   position: relative;

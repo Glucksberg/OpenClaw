@@ -265,7 +265,7 @@ export function renderApp(state: AppViewState) {
           const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
           const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
           return html`
-            <div class="nav-group ${isGroupCollapsed && !hasActiveTab ? "nav-group--collapsed" : ""}">
+            <div class="nav-group ${isGroupCollapsed ? "nav-group--collapsed" : ""} ${hasActiveTab ? "nav-group--has-active" : ""}">
               <button
                 class="nav-label"
                 @click=${() => {

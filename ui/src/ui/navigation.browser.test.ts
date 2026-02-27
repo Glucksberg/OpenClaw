@@ -185,4 +185,41 @@ describe("control UI routing", () => {
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.hash).toBe("");
   });
+
+  it("collapses a nav section even when the active tab is inside it", async () => {
+    const app = mountApp("/overview");
+    await app.updateComplete;
+
+    expect(app.tab).toBe("overview");
+
+    // Find the nav-group containing the active tab (overview is in the "control" group)
+    const navGroups = app.querySelectorAll<HTMLElement>(".nav-group");
+    let activeGroup: HTMLElement | null = null;
+    for (const group of navGroups) {
+      if (group.querySelector('a.nav-item[href="/overview"]')) {
+        activeGroup = group;
+        break;
+      }
+    }
+    expect(activeGroup).not.toBeNull();
+
+    // Section should not be collapsed initially
+    expect(activeGroup?.classList.contains("nav-group--collapsed")).toBe(false);
+
+    // Click the section toggle to collapse
+    const toggleBtn = activeGroup?.querySelector<HTMLButtonElement>(".nav-label");
+    expect(toggleBtn).not.toBeNull();
+    toggleBtn?.click();
+    await app.updateComplete;
+
+    // Section should now be collapsed and show the active indicator
+    expect(activeGroup?.classList.contains("nav-group--collapsed")).toBe(true);
+    expect(activeGroup?.classList.contains("nav-group--has-active")).toBe(true);
+
+    // Click the section toggle again to expand
+    toggleBtn?.click();
+    await app.updateComplete;
+
+    expect(activeGroup?.classList.contains("nav-group--collapsed")).toBe(false);
+  });
 });
