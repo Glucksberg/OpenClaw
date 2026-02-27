@@ -703,6 +703,8 @@ export const AgentEntrySchema = z
       .strict()
       .optional(),
     sandbox: AgentSandboxSchema,
+    /** Per-agent stream params (e.g. cacheRetention, temperature). */
+    params: z.record(z.string(), z.unknown()).optional(),
     tools: AgentToolsSchema,
   })
   .strict();
