@@ -401,7 +401,7 @@ describe("redactConfigSnapshot", () => {
     });
     const result = redactConfigSnapshot(snapshot);
     const env = result.config.env as Record<string, Record<string, string>>;
-    // NODE_ENV is not sensitive, should be preserved
+    // Without uiHints, pattern-based guessing is used for key names
     expect(env.vars.NODE_ENV).toBe("production");
     expect(env.vars.OPENAI_API_KEY).toBe(REDACTED_SENTINEL);
   });
@@ -786,6 +786,7 @@ describe("redactConfigSnapshot", () => {
     });
     const redacted = redactConfigSnapshot(snapshot, hints);
     const env = redacted.config.env as Record<string, string>;
+    // With partial hints, env key names still fall through to pattern-based guessing
     expect(env.GROQ_API_KEY).toBe(REDACTED_SENTINEL);
     expect(env.NODE_ENV).toBe("production");
 
@@ -816,6 +817,7 @@ describe("redactConfigSnapshot", () => {
         entries: Record<string, { env: Record<string, string> }>;
       }
     ).entries.web_search;
+    // With partial hints, env key names still fall through to pattern-based guessing
     expect(entry.env.GEMINI_API_KEY).toBe(REDACTED_SENTINEL);
     expect(entry.env.BRAVE_REGION).toBe("us");
 
@@ -854,10 +856,11 @@ describe("redactConfigSnapshot", () => {
       broadcast: Record<string, string[]>;
     };
 
+    // All env values are treated as sensitive (defense in depth)
     expect(config.env.GROQ_API_KEY).toBe(REDACTED_SENTINEL);
-    expect(config.env.NODE_ENV).toBe("production");
+    expect(config.env.NODE_ENV).toBe(REDACTED_SENTINEL);
     expect(config.skills.entries.web_search.env.GEMINI_API_KEY).toBe(REDACTED_SENTINEL);
-    expect(config.skills.entries.web_search.env.BRAVE_REGION).toBe("us");
+    expect(config.skills.entries.web_search.env.BRAVE_REGION).toBe(REDACTED_SENTINEL);
     expect(config.broadcast.apiToken).toEqual([REDACTED_SENTINEL, REDACTED_SENTINEL]);
     expect(config.broadcast.channels).toEqual(["ops", "eng"]);
 

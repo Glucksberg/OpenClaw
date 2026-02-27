@@ -125,7 +125,7 @@ const SecretsExecProviderSchema = z
       .max(20 * 1024 * 1024)
       .optional(),
     jsonOnly: z.boolean().optional(),
-    env: z.record(z.string(), z.string()).optional(),
+    env: z.record(z.string(), z.string().register(sensitive)).optional(),
     passEnv: z.array(z.string().regex(ENV_SECRET_REF_ID_PATTERN)).max(128).optional(),
     trustedDirs: z
       .array(
@@ -454,7 +454,7 @@ export const CliBackendSchema = z
     resumeOutput: z.union([z.literal("json"), z.literal("text"), z.literal("jsonl")]).optional(),
     input: z.union([z.literal("arg"), z.literal("stdin")]).optional(),
     maxPromptArgChars: z.number().int().positive().optional(),
-    env: z.record(z.string(), z.string()).optional(),
+    env: z.record(z.string(), z.string().register(sensitive)).optional(),
     clearEnv: z.array(z.string()).optional(),
     modelArg: z.string().optional(),
     modelAliases: z.record(z.string(), z.string()).optional(),

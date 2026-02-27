@@ -88,7 +88,7 @@ export const InternalHookHandlerSchema = z
 const HookConfigSchema = z
   .object({
     enabled: z.boolean().optional(),
-    env: z.record(z.string(), z.string()).optional(),
+    env: z.record(z.string(), z.string().register(sensitive)).optional(),
   })
   // Hook configs are intentionally open-ended (handlers can define their own keys).
   // Keep enabled/env typed, but allow additional per-hook keys without marking the
