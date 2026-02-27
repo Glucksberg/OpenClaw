@@ -140,18 +140,20 @@ export async function ensureOpenClawModelsJson(
     explicit: explicitProviders,
   });
   const implicitBedrock = await resolveImplicitBedrockProvider({ agentDir, config: cfg });
-  if (implicitBedrock) {
+  if (implicitBedrock && !disabledIds.has("amazon-bedrock")) {
     const existing = providers["amazon-bedrock"];
     providers["amazon-bedrock"] = existing
       ? mergeProviderModels(implicitBedrock, existing)
       : implicitBedrock;
   }
   const implicitCopilot = await resolveImplicitCopilotProvider({ agentDir });
-  if (implicitCopilot && !providers["github-copilot"]) {
+  if (implicitCopilot && !disabledIds.has("github-copilot") && !providers["github-copilot"]) {
     providers["github-copilot"] = implicitCopilot;
   }
 
-  if (Object.keys(providers).length === 0) {
+  // When all providers are disabled and none resolved implicitly, we still need
+  // to proceed through merge-mode cleanup so stale entries in models.json get removed.
+  if (Object.keys(providers).length === 0 && disabledIds.size === 0) {
     return { agentDir, wrote: false };
   }
 
