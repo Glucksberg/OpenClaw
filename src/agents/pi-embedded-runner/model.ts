@@ -96,17 +96,19 @@ export function resolveModel(
     }
     const providerCfg = providers[provider];
     if (providerCfg || modelId.startsWith("mock-")) {
+      // Find the matched model by ID so we propagate its reasoning/contextWindow/maxTokens
+      const matchedModel = (providerCfg?.models ?? []).find((m) => m.id.trim() === modelId.trim());
       const fallbackModel: Model<Api> = normalizeModelCompat({
         id: modelId,
         name: modelId,
         api: providerCfg?.api ?? "openai-responses",
         provider,
         baseUrl: providerCfg?.baseUrl,
-        reasoning: false,
+        reasoning: matchedModel?.reasoning ?? false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: providerCfg?.models?.[0]?.contextWindow ?? DEFAULT_CONTEXT_TOKENS,
-        maxTokens: providerCfg?.models?.[0]?.maxTokens ?? DEFAULT_CONTEXT_TOKENS,
+        contextWindow: matchedModel?.contextWindow ?? DEFAULT_CONTEXT_TOKENS,
+        maxTokens: matchedModel?.maxTokens ?? DEFAULT_CONTEXT_TOKENS,
       } as Model<Api>);
       return { model: fallbackModel, authStorage, modelRegistry };
     }

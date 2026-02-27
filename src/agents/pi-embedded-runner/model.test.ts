@@ -324,4 +324,63 @@ describe("resolveModel", () => {
     expect(result.model).toBeUndefined();
     expect(result.error).toBe("Unknown model: google-antigravity/some-model");
   });
+
+  it("propagates reasoning from matched model in provider config (#25636)", () => {
+    const cfg = {
+      models: {
+        providers: {
+          ollama: {
+            baseUrl: "http://localhost:11434/v1",
+            api: "openai-responses",
+            models: [{ ...makeModel("thinking-model"), reasoning: true, contextWindow: 128000 }],
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const result = resolveModel("ollama", "thinking-model", "/tmp/agent", cfg);
+
+    expect(result.error).toBeUndefined();
+    expect(result.model?.reasoning).toBe(true);
+  });
+
+  it("uses matched model contextWindow/maxTokens instead of models[0] (#25636)", () => {
+    const cfg = {
+      models: {
+        providers: {
+          custom: {
+            baseUrl: "http://localhost:8000",
+            models: [
+              { ...makeModel("small-model"), contextWindow: 4096, maxTokens: 2048 },
+              { ...makeModel("large-model"), contextWindow: 128000, maxTokens: 64000 },
+            ],
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const result = resolveModel("custom", "large-model", "/tmp/agent", cfg);
+
+    expect(result.error).toBeUndefined();
+    expect(result.model?.contextWindow).toBe(128000);
+    expect(result.model?.maxTokens).toBe(64000);
+  });
+
+  it("defaults reasoning to false when matched model has no reasoning field (#25636)", () => {
+    const cfg = {
+      models: {
+        providers: {
+          custom: {
+            baseUrl: "http://localhost:8000",
+            models: [makeModel("basic-model")],
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const result = resolveModel("custom", "basic-model", "/tmp/agent", cfg);
+
+    expect(result.error).toBeUndefined();
+    expect(result.model?.reasoning).toBe(false);
+  });
 });
