@@ -651,6 +651,36 @@ describe("send", () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
+    it("sends SMS via chat_guid without re-resolving to iMessage (#26868)", async () => {
+      // When the user explicitly passes chat_guid:SMS;-;+1..., the SMS protocol
+      // must be honored.  Previously the target was normalized to just the phone
+      // number, which caused re-resolution to the iMessage GUID.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              data: { messageId: "sms-msg-ok" },
+            }),
+          ),
+      });
+
+      const result = await sendMessageBlueBubbles("chat_guid:SMS;-;+13239092441", "SMS test", {
+        serverUrl: "http://localhost:1234",
+        password: "test",
+      });
+
+      expect(result.messageId).toBe("sms-msg-ok");
+      // Only 1 fetch call: the send itself.  No chat query should happen
+      // because chat_guid targets short-circuit resolution.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const sendCall = mockFetch.mock.calls[0];
+      expect(sendCall[0]).toContain("/api/v1/message/text");
+      const body = JSON.parse(sendCall[1].body);
+      expect(body.chatGuid).toBe("SMS;-;+13239092441");
+    });
+
     it("handles send failure", async () => {
       mockResolvedHandleTarget();
       mockFetch.mockResolvedValueOnce({
