@@ -192,6 +192,7 @@ export class QmdMemoryManager implements MemorySearchManager {
   private embedBackoffUntil: number | null = null;
   private embedFailureCount = 0;
   private attemptedNullByteCollectionRepair = false;
+  private attemptedUniqueConstraintRepair = false;
 
   private constructor(params: {
     cfg: OpenClawConfig;
@@ -605,6 +606,47 @@ export class QmdMemoryManager implements MemorySearchManager {
     return true;
   }
 
+  private isUniqueConstraintError(err: unknown): boolean {
+    const message = err instanceof Error ? err.message : String(err);
+    const lower = message.toLowerCase();
+    return lower.includes("unique constraint failed") && lower.includes("documents");
+  }
+
+  /**
+   * When `qmd update` fails with a UNIQUE constraint on the documents table,
+   * the index is in a broken state where it tries to INSERT existing documents
+   * instead of doing incremental updates.  Delete the index DB and re-add
+   * collections so the next `qmd update` builds a fresh index.
+   */
+  private async tryRepairUniqueConstraint(err: unknown, reason: string): Promise<boolean> {
+    if (this.attemptedUniqueConstraintRepair) {
+      return false;
+    }
+    if (!this.isUniqueConstraintError(err)) {
+      return false;
+    }
+    this.attemptedUniqueConstraintRepair = true;
+    log.warn(
+      `qmd update failed with UNIQUE constraint on documents (${reason}); deleting index and rebuilding`,
+    );
+    // Close our read-only handle so the file can be deleted cleanly.
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch {}
+      this.db = null;
+    }
+    try {
+      await fs.rm(this.indexPath, { force: true });
+    } catch (rmErr) {
+      log.warn(`failed to remove qmd index for repair: ${String(rmErr)}`);
+      return false;
+    }
+    // Re-add collections into the now-empty index DB.
+    await this.ensureCollections();
+    return true;
+  }
+
   async search(
     query: string,
     opts?: { maxResults?: number; minScore?: number; sessionKey?: string },
@@ -928,10 +970,15 @@ export class QmdMemoryManager implements MemorySearchManager {
     try {
       await this.runQmd(["update"], { timeoutMs: this.qmd.update.updateTimeoutMs });
     } catch (err) {
-      if (!(await this.tryRepairNullByteCollections(err, reason))) {
-        throw err;
+      if (await this.tryRepairNullByteCollections(err, reason)) {
+        await this.runQmd(["update"], { timeoutMs: this.qmd.update.updateTimeoutMs });
+        return;
       }
-      await this.runQmd(["update"], { timeoutMs: this.qmd.update.updateTimeoutMs });
+      if (await this.tryRepairUniqueConstraint(err, reason)) {
+        await this.runQmd(["update"], { timeoutMs: this.qmd.update.updateTimeoutMs });
+        return;
+      }
+      throw err;
     }
   }
 

@@ -744,6 +744,94 @@ describe("QmdMemoryManager", () => {
     await manager.close();
   });
 
+  it("deletes index and retries when qmd update fails with UNIQUE constraint on documents", async () => {
+    cfg = {
+      ...cfg,
+      memory: {
+        backend: "qmd",
+        qmd: {
+          includeDefaultMemory: true,
+          update: { interval: "0s", debounceMs: 0, onBoot: false },
+          paths: [],
+        },
+      },
+    } as OpenClawConfig;
+
+    // Pre-create the index DB file so we can verify it gets deleted.
+    const indexDir = path.join(stateDir, "agents", agentId, "qmd", "xdg-cache", "qmd");
+    await fs.mkdir(indexDir, { recursive: true });
+    const indexPath = path.join(indexDir, "index.sqlite");
+    await fs.writeFile(indexPath, "fake-db");
+
+    let updateCalls = 0;
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === "update") {
+        updateCalls += 1;
+        const child = createMockChild({ autoClose: false });
+        if (updateCalls === 1) {
+          emitAndClose(
+            child,
+            "stderr",
+            "SQLiteError: UNIQUE constraint failed: documents.collection, documents.path",
+            1,
+          );
+          return child;
+        }
+        queueMicrotask(() => {
+          child.closeWith(0);
+        });
+        return child;
+      }
+      return createMockChild();
+    });
+
+    const { manager } = await createManager({ mode: "status" });
+    await expect(manager.sync({ reason: "manual" })).resolves.toBeUndefined();
+
+    expect(updateCalls).toBe(2);
+    // Index file should have been deleted during repair.
+    await expect(fs.stat(indexPath)).rejects.toThrow();
+    expect(logWarnMock).toHaveBeenCalledWith(
+      expect.stringContaining("UNIQUE constraint on documents"),
+    );
+
+    await manager.close();
+  });
+
+  it("does not retry UNIQUE constraint repair more than once", async () => {
+    cfg = {
+      ...cfg,
+      memory: {
+        backend: "qmd",
+        qmd: {
+          includeDefaultMemory: true,
+          update: { interval: "0s", debounceMs: 0, onBoot: false },
+          paths: [],
+        },
+      },
+    } as OpenClawConfig;
+
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === "update") {
+        const child = createMockChild({ autoClose: false });
+        emitAndClose(
+          child,
+          "stderr",
+          "SQLiteError: UNIQUE constraint failed: documents.collection, documents.path",
+          1,
+        );
+        return child;
+      }
+      return createMockChild();
+    });
+
+    const { manager } = await createManager({ mode: "status" });
+    // First sync: repair attempt + retry still fails → should throw.
+    await expect(manager.sync({ reason: "manual" })).rejects.toThrow("UNIQUE constraint failed");
+
+    await manager.close();
+  });
+
   it("uses configured qmd search mode command", async () => {
     cfg = {
       ...cfg,
