@@ -5,6 +5,7 @@ import {
   formatBillingErrorMessage,
   formatAssistantErrorText,
   formatRawAssistantErrorForUi,
+  isTruncatedToolCallJsonError,
 } from "./pi-embedded-helpers.js";
 import { makeAssistantMessageFixture } from "./test-helpers/assistant-message-fixtures.js";
 
@@ -116,6 +117,64 @@ describe("formatAssistantErrorText", () => {
   it("returns a friendly message for empty stream chunk errors", () => {
     const msg = makeAssistantError("request ended without sending any chunks");
     expect(formatAssistantErrorText(msg)).toBe("LLM request timed out.");
+  });
+
+  it("returns a friendly message for truncated tool call JSON errors", () => {
+    const msg = makeAssistantError(
+      "Unterminated string in JSON at position 8119 (line 1 column 8120)",
+    );
+    const result = formatAssistantErrorText(msg);
+    expect(result).toContain("truncated");
+    expect(result).toContain("token limit");
+    expect(result).toContain("retry");
+  });
+
+  it("returns a friendly message for 'Unexpected end of JSON' errors", () => {
+    const msg = makeAssistantError("Unexpected end of JSON input");
+    const result = formatAssistantErrorText(msg);
+    expect(result).toContain("truncated");
+    expect(result).toContain("token limit");
+  });
+
+  it("returns a friendly message for 'Unexpected non-whitespace' errors", () => {
+    const msg = makeAssistantError(
+      "Unexpected non-whitespace character after JSON at position 4096",
+    );
+    const result = formatAssistantErrorText(msg);
+    expect(result).toContain("truncated");
+  });
+});
+
+describe("isTruncatedToolCallJsonError", () => {
+  it("detects 'Unterminated string in JSON' errors", () => {
+    expect(
+      isTruncatedToolCallJsonError(
+        "Unterminated string in JSON at position 8119 (line 1 column 8120)",
+      ),
+    ).toBe(true);
+  });
+
+  it("detects 'Unexpected end of JSON' errors", () => {
+    expect(isTruncatedToolCallJsonError("Unexpected end of JSON input")).toBe(true);
+  });
+
+  it("detects 'Unexpected non-whitespace' after JSON errors", () => {
+    expect(
+      isTruncatedToolCallJsonError(
+        "Unexpected non-whitespace character after JSON at position 4096",
+      ),
+    ).toBe(true);
+  });
+
+  it("returns false for unrelated errors", () => {
+    expect(isTruncatedToolCallJsonError("429 rate limit reached")).toBe(false);
+    expect(isTruncatedToolCallJsonError("request_too_large")).toBe(false);
+    expect(isTruncatedToolCallJsonError("")).toBe(false);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isTruncatedToolCallJsonError("UNTERMINATED STRING IN JSON at position 100")).toBe(true);
+    expect(isTruncatedToolCallJsonError("unexpected end of json input")).toBe(true);
   });
 });
 

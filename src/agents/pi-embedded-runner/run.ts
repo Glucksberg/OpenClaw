@@ -45,6 +45,7 @@ import {
   parseImageDimensionError,
   isRateLimitAssistantError,
   isTimeoutErrorMessage,
+  isTruncatedToolCallJsonError,
   pickFallbackThinkingLevel,
   type FailoverReason,
 } from "../pi-embedded-helpers.js";
@@ -512,6 +513,7 @@ export async function runEmbeddedPiAgent(
       const MAX_RUN_LOOP_ITERATIONS = resolveMaxRunRetryIterations(profileCandidates.length);
       let overflowCompactionAttempts = 0;
       let toolResultTruncationAttempted = false;
+      let truncatedToolCallRetried = false;
       const usageAccumulator = createUsageAccumulator();
       let lastRunPromptUsage: ReturnType<typeof normalizeUsage> | undefined;
       let autoCompactionCount = 0;
@@ -949,6 +951,25 @@ export async function runEmbeddedPiAgent(
               `unsupported thinking level for ${provider}/${modelId}; retrying with ${fallbackThinking}`,
             );
             thinkLevel = fallbackThinking;
+            continue;
+          }
+
+          // Handle truncated tool call JSON errors caused by model output exceeding maxTokens.
+          // When a model generates a tool call with arguments that exceed the token limit, the
+          // output is truncated mid-JSON, causing a parse error. Retry once — the session history
+          // repair in the next attempt will drop the corrupted tool call, and the model can
+          // produce a valid response on the next try.
+          if (
+            !aborted &&
+            !truncatedToolCallRetried &&
+            lastAssistant?.stopReason === "error" &&
+            isTruncatedToolCallJsonError(lastAssistant.errorMessage ?? "")
+          ) {
+            truncatedToolCallRetried = true;
+            log.warn(
+              `truncated tool call JSON detected for ${provider}/${modelId}; ` +
+                `retrying (the model's output likely exceeded maxTokens)`,
+            );
             continue;
           }
 

@@ -520,6 +520,13 @@ export function formatAssistantErrorText(
     );
   }
 
+  if (isTruncatedToolCallJsonError(raw)) {
+    return (
+      "Model output was truncated (tool call too large for token limit). " +
+      "The model will be asked to retry with smaller operations."
+    );
+  }
+
   const invalidRequest = raw.match(/"type":"invalid_request_error".*?"message":"([^"]+)"/);
   if (invalidRequest?.[1]) {
     return `LLM request rejected: ${invalidRequest[1]}`;
@@ -754,6 +761,22 @@ export function isMissingToolCallInputError(raw: string): boolean {
     return false;
   }
   return TOOL_CALL_INPUT_MISSING_RE.test(raw) || TOOL_CALL_INPUT_PATH_RE.test(raw);
+}
+
+/**
+ * Detect truncated tool call JSON errors caused by model output exceeding maxTokens.
+ * When a model generates a tool call with large arguments and the output is truncated
+ * at the token limit, the OpenAI SDK receives incomplete JSON and throws a parse error
+ * like "Unterminated string in JSON at position 8119".
+ */
+const TRUNCATED_JSON_RE =
+  /unterminated string in json|unexpected end of json|unexpected non-whitespace.*after json/i;
+
+export function isTruncatedToolCallJsonError(raw: string): boolean {
+  if (!raw) {
+    return false;
+  }
+  return TRUNCATED_JSON_RE.test(raw);
 }
 
 export function isBillingAssistantError(msg: AssistantMessage | undefined): boolean {
