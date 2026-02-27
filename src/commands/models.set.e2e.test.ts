@@ -96,7 +96,28 @@ describe("models set + fallbacks", () => {
           primary: "openai/gpt-4.1-mini",
           fallbacks: ["anthropic/claude-opus-4-6"],
         },
-        models: { "anthropic/claude-opus-4-6": {} },
+        models: { "anthropic/claude-opus-4-6": {}, "openai/gpt-4.1-mini": {} },
+      },
+    });
+  });
+
+  it("includes primary model in allowlist when adding fallback with object model config", async () => {
+    mockConfigSnapshot({
+      agents: { defaults: { model: { primary: "anthropic/claude-opus-4-6" } } },
+    });
+    const runtime = makeRuntime();
+
+    await modelsFallbacksAddCommand("openai/o3", runtime);
+
+    expect(writeConfigFile).toHaveBeenCalledTimes(1);
+    const written = getWrittenConfig();
+    expect(written.agents).toEqual({
+      defaults: {
+        model: {
+          primary: "anthropic/claude-opus-4-6",
+          fallbacks: ["openai/o3"],
+        },
+        models: { "openai/o3": {}, "anthropic/claude-opus-4-6": {} },
       },
     });
   });

@@ -1,7 +1,11 @@
 import { buildModelAliasIndex, resolveModelRefFromString } from "../../agents/model-selection.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
-import { resolveAgentModelFallbackValues, toAgentModelListLike } from "../../config/model-input.js";
+import {
+  resolveAgentModelFallbackValues,
+  resolveAgentModelPrimaryValue,
+  toAgentModelListLike,
+} from "../../config/model-input.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import { loadModelsConfig } from "./load-config.js";
 import {
@@ -83,6 +87,16 @@ export async function addFallbackCommand(
     const nextModels = { ...cfg.agents?.defaults?.models } as Record<string, unknown>;
     if (!nextModels[targetKey]) {
       nextModels[targetKey] = {};
+    }
+    // Ensure the current primary model stays in the allowlist so it isn't
+    // silently blocked when `models` is populated for the first time.
+    const primaryRaw = resolveAgentModelPrimaryValue(cfg.agents?.defaults?.[params.key]);
+    if (primaryRaw) {
+      const primaryResolved = resolveModelTarget({ raw: primaryRaw, cfg });
+      const primaryKey = modelKey(primaryResolved.provider, primaryResolved.model);
+      if (!nextModels[primaryKey]) {
+        nextModels[primaryKey] = {};
+      }
     }
     const existing = getFallbacks(cfg, params.key);
     const existingKeys = resolveModelKeysFromEntries({ cfg, entries: existing });
