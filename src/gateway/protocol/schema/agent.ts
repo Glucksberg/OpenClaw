@@ -37,6 +37,8 @@ export const SendParamsSchema = Type.Object(
     mediaUrl: Type.Optional(Type.String()),
     mediaUrls: Type.Optional(Type.Array(Type.String())),
     gifPlayback: Type.Optional(Type.Boolean()),
+    /** Optional filename hint for document-type media sends (e.g. WhatsApp file messages). */
+    fileName: Type.Optional(Type.String()),
     channel: Type.Optional(Type.String()),
     accountId: Type.Optional(Type.String()),
     /** Optional agent id for per-agent media root resolution on gateway sends. */
