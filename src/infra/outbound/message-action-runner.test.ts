@@ -1202,6 +1202,57 @@ describe("runMessageAction outbound allowlist enforcement", () => {
     ).rejects.toThrow(/Target not in allowlist/);
   });
 
+  it("blocks sendAttachment to a target not in the allowFrom list", async () => {
+    await expect(
+      runMessageAction({
+        cfg: restrictedConfig,
+        action: "sendAttachment",
+        params: {
+          channel: "whatsapp",
+          target: "+15559999999",
+          media: "https://example.com/pic.png",
+          message: "caption",
+        },
+        dryRun: true,
+      }),
+    ).rejects.toThrow(/Target not in allowlist/);
+  });
+
+  it("blocks thread-reply to a target not in the allowFrom list", async () => {
+    await expect(
+      runDryAction({
+        cfg: restrictedConfig,
+        action: "thread-reply",
+        actionParams: {
+          channel: "whatsapp",
+          target: "+15559999999",
+          message: "reply text",
+        },
+      }),
+    ).rejects.toThrow(/Target not in allowlist/);
+  });
+
+  it("redacts phone numbers in allowlist error messages (PII)", async () => {
+    try {
+      await runDrySend({
+        cfg: restrictedConfig,
+        actionParams: {
+          channel: "whatsapp",
+          target: "+15559999999",
+          message: "hello",
+        },
+      });
+      throw new Error("expected rejection");
+    } catch (err) {
+      const message = (err as Error).message;
+      // The raw phone number should NOT appear in the error
+      expect(message).not.toContain("+15559999999");
+      // But the last 4 digits should be present (masked form)
+      expect(message).toContain("***9999");
+      expect(message).toContain("allowFrom");
+    }
+  });
+
   it("provides clear error message for blocked targets", async () => {
     await expect(
       runDrySend({
