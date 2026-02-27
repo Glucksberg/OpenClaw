@@ -67,6 +67,68 @@ compaction and can run alongside it.
 
 See [OpenAI provider](/providers/openai) for model params and overrides.
 
+## Post-compaction audit
+
+After every compaction (auto or manual), OpenClaw runs a **post-compaction
+audit** that checks whether the agent re-read a set of required startup files.
+If any are missing, a warning is injected into the session so the agent can
+recover.
+
+The default required files are:
+
+- `WORKFLOW_AUTO.md` (literal match)
+- `memory/YYYY-MM-DD.md` (pattern match for any daily memory file)
+
+### What is WORKFLOW_AUTO.md
+
+`WORKFLOW_AUTO.md` is a workspace file that tells the agent **which files to
+re-read after a context reset**. Because compaction replaces the full
+conversation with a summary, the agent loses any instructions it loaded at the
+start of the session. `WORKFLOW_AUTO.md` acts as a recovery checklist.
+
+A typical `WORKFLOW_AUTO.md` looks like:
+
+```md
+# Post-Compaction Recovery
+
+After context compaction, read these files in order:
+
+1. SOUL.md
+2. USER.md
+3. memory/YYYY-MM-DD.md (today + yesterday)
+4. HEARTBEAT.md
+
+Resume the conversation naturally without announcing the reset.
+```
+
+Place this file in the root of your [agent workspace](/concepts/agent-workspace).
+`openclaw setup` will create a default if one does not exist.
+
+### How the audit works
+
+1. Compaction completes (auto or `/compact`).
+2. OpenClaw injects the "Session Startup" and "Red Lines" sections from
+   `AGENTS.md` as a post-compaction context reminder.
+3. On the **next agent turn**, the audit reads the session history and checks
+   which files the agent accessed via the Read tool.
+4. Any required file that was not read triggers a warning:
+
+   ```
+   Post-Compaction Audit: The following required startup files were not
+   read after context reset:
+     - WORKFLOW_AUTO.md
+   Please read them now using the Read tool before continuing.
+   ```
+
+The audit is **one-shot per compaction** (it fires once, then resets) and
+**best-effort** (failures are silently ignored).
+
+### Customizing the required files
+
+The default list is defined in `post-compaction-audit.ts`. You can override it
+by passing a custom `requiredReads` array in your agent configuration. Both
+literal file names and regular expressions are supported.
+
 ## Tips
 
 - Use `/compact` when sessions feel stale or context is bloated.
