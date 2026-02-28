@@ -3,6 +3,7 @@ import path from "node:path";
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { isRecord } from "../utils.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
+import { normalizeProviderId } from "./model-selection.js";
 import {
   normalizeProviders,
   type ProviderConfig,
@@ -118,11 +119,14 @@ export async function ensureOpenClawModelsJson(
   const agentDir = agentDirOverride?.trim() ? agentDirOverride.trim() : resolveOpenClawAgentDir();
 
   // Filter out explicitly disabled providers (enabled: false) before resolution.
+  // Normalize disabled keys through the same alias→canonical mapping used in
+  // provider resolution so that aliases like "qwen", "aws-bedrock", "doubao"
+  // correctly suppress their canonical counterparts.
   const rawProviders = cfg.models?.providers ?? {};
   const disabledIds = new Set(
     Object.entries(rawProviders)
       .filter(([, p]) => p.enabled === false)
-      .map(([id]) => id),
+      .map(([id]) => normalizeProviderId(id)),
   );
   const explicitProviders = Object.fromEntries(
     Object.entries(rawProviders).filter(([, p]) => p.enabled !== false),
@@ -173,7 +177,8 @@ export async function ensureOpenClawModelsJson(
       for (const [key, entry] of Object.entries(existingProviders)) {
         // Skip providers explicitly disabled in config — toggling enabled: false
         // must remove the provider from the merged output, not preserve the stale entry.
-        if (disabledIds.has(key)) {
+        // Normalize the existing key so alias-keyed stale entries are also caught.
+        if (disabledIds.has(key) || disabledIds.has(normalizeProviderId(key))) {
           continue;
         }
         mergedProviders[key] = entry;

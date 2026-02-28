@@ -255,6 +255,116 @@ describe("models-config provider enabled flag", () => {
     });
   });
 
+  it("normalizes alias disabled keys to canonical provider IDs", async () => {
+    await withTempHome(async (home) => {
+      await withTempEnv([...MODELS_CONFIG_IMPLICIT_ENV_VARS], async () => {
+        unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
+
+        const agentDir = path.join(home, "agent-alias-disable");
+        process.env.OPENCLAW_AGENT_DIR = agentDir;
+        process.env.PI_CODING_AGENT_DIR = agentDir;
+
+        // Seed models.json with canonical provider names that should be cleaned
+        // up when the user disables them using aliases.
+        await fs.mkdir(agentDir, { recursive: true });
+        await fs.writeFile(
+          path.join(agentDir, "models.json"),
+          JSON.stringify(
+            {
+              providers: {
+                "qwen-portal": {
+                  baseUrl: "https://portal.qwen.ai/v1",
+                  apiKey: "QWEN_KEY",
+                  models: [{ id: "coder-model", name: "Qwen Coder" }],
+                },
+                volcengine: {
+                  baseUrl: "https://volcengine.example/v1",
+                  apiKey: "VOLC_KEY",
+                  models: [{ id: "doubao-model", name: "Doubao" }],
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        );
+
+        // Disable using aliases ("qwen" -> "qwen-portal", "doubao" -> "volcengine").
+        const cfg: OpenClawConfig = {
+          models: {
+            providers: {
+              qwen: {
+                enabled: false,
+              },
+              doubao: {
+                enabled: false,
+              },
+            },
+          },
+        };
+
+        await ensureOpenClawModelsJson(cfg, agentDir);
+
+        const raw = await fs.readFile(path.join(agentDir, "models.json"), "utf8");
+        const parsed = JSON.parse(raw) as { providers: Record<string, ProviderConfig> };
+        // Both canonical providers must be removed via their alias-disabled keys.
+        expect(parsed.providers["qwen-portal"]).toBeUndefined();
+        expect(parsed.providers.volcengine).toBeUndefined();
+      });
+    });
+  });
+
+  it("normalizes aws-bedrock alias to suppress amazon-bedrock implicit provider", async () => {
+    await withTempHome(async (home) => {
+      await withTempEnv(
+        [...MODELS_CONFIG_IMPLICIT_ENV_VARS, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+        async () => {
+          unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
+
+          const agentDir = path.join(home, "agent-bedrock-alias-disable");
+          process.env.OPENCLAW_AGENT_DIR = agentDir;
+          process.env.PI_CODING_AGENT_DIR = agentDir;
+
+          // Seed models.json with a stale amazon-bedrock entry.
+          await fs.mkdir(agentDir, { recursive: true });
+          await fs.writeFile(
+            path.join(agentDir, "models.json"),
+            JSON.stringify(
+              {
+                providers: {
+                  "amazon-bedrock": {
+                    baseUrl: "https://bedrock-runtime.us-east-1.amazonaws.com",
+                    apiKey: "AWS_PROFILE",
+                    models: [{ id: "bedrock-model", name: "Bedrock Model" }],
+                  },
+                },
+              },
+              null,
+              2,
+            ),
+          );
+
+          // Disable using the "aws-bedrock" alias (canonical: "amazon-bedrock").
+          const cfg: OpenClawConfig = {
+            models: {
+              providers: {
+                "aws-bedrock": {
+                  enabled: false,
+                },
+              },
+            },
+          };
+
+          await ensureOpenClawModelsJson(cfg, agentDir);
+
+          const raw = await fs.readFile(path.join(agentDir, "models.json"), "utf8");
+          const parsed = JSON.parse(raw) as { providers: Record<string, ProviderConfig> };
+          expect(parsed.providers["amazon-bedrock"]).toBeUndefined();
+        },
+      );
+    });
+  });
+
   it("does not re-add implicit copilot provider when disabled in config", async () => {
     await withTempHome(async (home) => {
       await withTempEnv([...MODELS_CONFIG_IMPLICIT_ENV_VARS, "COPILOT_GITHUB_TOKEN"], async () => {
