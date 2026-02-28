@@ -1283,3 +1283,95 @@ describe("runMessageAction outbound allowlist enforcement", () => {
     ).rejects.toThrow(/requires a target/);
   });
 });
+
+describe("runMessageAction allowlist enforcement for channels without resolveTarget", () => {
+  // Telegram has resolveAllowFrom but no outbound.resolveTarget,
+  // so the fallback allowlist check in resolveOutboundTarget must enforce.
+  const telegramRestrictedConfig = {
+    channels: {
+      telegram: {
+        allowFrom: ["111111111"],
+      },
+    },
+  } as OpenClawConfig;
+
+  const telegramWildcardConfig = {
+    channels: {
+      telegram: {
+        allowFrom: ["*"],
+      },
+    },
+  } as OpenClawConfig;
+
+  const telegramOpenConfig = {
+    channels: {
+      telegram: {},
+    },
+  } as OpenClawConfig;
+
+  beforeEach(() => {
+    installChannelRuntimes();
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "telegram",
+          source: "test",
+          plugin: telegramPlugin,
+        },
+      ]),
+    );
+  });
+
+  afterEach(() => {
+    setActivePluginRegistry(createTestRegistry([]));
+  });
+
+  it("blocks send to a telegram target not in the allowFrom list", async () => {
+    await expect(
+      runDrySend({
+        cfg: telegramRestrictedConfig,
+        actionParams: {
+          channel: "telegram",
+          target: "999999999",
+          message: "hello",
+        },
+      }),
+    ).rejects.toThrow(/Target not in allowlist/);
+  });
+
+  it("allows send to a telegram target that is in the allowFrom list", async () => {
+    const result = await runDrySend({
+      cfg: telegramRestrictedConfig,
+      actionParams: {
+        channel: "telegram",
+        target: "111111111",
+        message: "hello",
+      },
+    });
+    expect(result.kind).toBe("send");
+  });
+
+  it("allows send when telegram allowFrom contains wildcard", async () => {
+    const result = await runDrySend({
+      cfg: telegramWildcardConfig,
+      actionParams: {
+        channel: "telegram",
+        target: "999999999",
+        message: "hello",
+      },
+    });
+    expect(result.kind).toBe("send");
+  });
+
+  it("allows send when telegram allowFrom is empty (open access)", async () => {
+    const result = await runDrySend({
+      cfg: telegramOpenConfig,
+      actionParams: {
+        channel: "telegram",
+        target: "999999999",
+        message: "hello",
+      },
+    });
+    expect(result.kind).toBe("send");
+  });
+});

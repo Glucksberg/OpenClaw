@@ -120,6 +120,46 @@ describe("resolveOutboundTarget allowFrom fallback enforcement", () => {
     });
     expect(res).toEqual({ ok: true, to: "123456789" });
   });
+
+  it("strips channel prefix from target before comparison", () => {
+    const cfg: OpenClawConfig = {
+      channels: { telegram: { allowFrom: ["111111111"] } },
+    };
+    // After normalizeTarget, Telegram targets get a "telegram:" prefix
+    const res = resolveOutboundTarget({
+      channel: "telegram",
+      to: "telegram:111111111",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res).toEqual({ ok: true, to: "telegram:111111111" });
+  });
+
+  it("rejects channel-prefixed target when not in allowFrom", () => {
+    const cfg: OpenClawConfig = {
+      channels: { telegram: { allowFrom: ["111111111"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "telegram",
+      to: "telegram:999999999",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("blocks defaultTo when not in allowFrom", () => {
+    const cfg: OpenClawConfig = {
+      channels: { telegram: { defaultTo: "999999999", allowFrom: ["111111111"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "telegram",
+      to: "",
+      cfg,
+      mode: "implicit",
+    });
+    expect(res.ok).toBe(false);
+  });
 });
 
 describe("resolveSessionDeliveryTarget", () => {

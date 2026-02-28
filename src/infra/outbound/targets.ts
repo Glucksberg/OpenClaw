@@ -231,7 +231,17 @@ export function resolveOutboundTarget(params: {
     // without a resolver (e.g. Telegram/Slack/Signal/iMessage) cannot bypass
     // the allowlist by returning ok for any explicit target.
     if (allowFrom && allowFrom.length > 0 && !allowFrom.includes("*")) {
-      if (!allowFrom.includes(effectiveTo)) {
+      // Strip channel prefix (e.g. "telegram:123" -> "123") before comparison
+      // because normalized targets may carry a channel prefix while allowFrom
+      // entries from config typically do not.
+      const channelPrefix = `${params.channel}:`;
+      const stripPrefix = (value: string): string => {
+        const lower = value.trim().toLowerCase();
+        return lower.startsWith(channelPrefix) ? lower.slice(channelPrefix.length) : lower;
+      };
+      const normalizedTo = stripPrefix(effectiveTo);
+      const normalizedAllowFrom = allowFrom.map(stripPrefix);
+      if (!normalizedAllowFrom.includes(normalizedTo)) {
         const hint = plugin.messaging?.targetResolver?.hint;
         return {
           ok: false,
