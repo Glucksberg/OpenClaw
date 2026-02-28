@@ -1446,6 +1446,49 @@ describe("rejectPlaceholderSecrets", () => {
     });
   });
 
+  describe("P1: wildcardVariants depth bound prevents DoS", () => {
+    it("does not hang on deeply nested config payloads (>20 segments)", () => {
+      // Build a config object with 30 levels of nesting, ending in a sensitive key.
+      // Without the depth bound in wildcardVariants, this would generate 2^30
+      // (~1 billion) combinations and stall the event loop.
+      const keys = Array.from({ length: 30 }, (_, i) => `level${i}`);
+      let obj: Record<string, unknown> = { token: "REPLACE_ME" };
+      for (let i = keys.length - 1; i >= 0; i--) {
+        obj = { [keys[i]]: obj };
+      }
+
+      const hints: ConfigUiHints = {
+        [`${keys.join(".")}.token`]: { sensitive: true },
+      };
+
+      // Should complete promptly (well under 1 second) instead of hanging
+      const start = performance.now();
+      const result = rejectPlaceholderSecrets(obj, hints);
+      const elapsed = performance.now() - start;
+
+      // The placeholder should still be detected even with the fallback
+      // linear variant strategy
+      expect(result.ok).toBe(false);
+      expect(result.humanReadableMessage).toContain("token");
+      // Sanity: must complete in reasonable time (< 2s); without the fix
+      // this would take minutes/hours
+      expect(elapsed).toBeLessThan(2000);
+    });
+
+    it("still generates full 2^n variants for shallow paths", () => {
+      // Paths with <= 12 segments should still get the full enumeration
+      const hints: ConfigUiHints = {
+        "a.*.c.*.token": { sensitive: true },
+      };
+      const result = rejectPlaceholderSecrets(
+        { a: { x: { c: { y: { token: "REDACTED" } } } } },
+        hints,
+      );
+      expect(result.ok).toBe(false);
+      expect(result.humanReadableMessage).toContain("token");
+    });
+  });
+
   describe("P2: sensitive:false hints override parent and pattern sensitivity", () => {
     it("allows placeholder at path marked sensitive:false even if pattern matches", () => {
       const hints: ConfigUiHints = {

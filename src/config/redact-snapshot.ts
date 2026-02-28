@@ -443,17 +443,48 @@ function isPlaceholderSecretValue(value: string): boolean {
 }
 
 /**
+ * Maximum number of path segments for which we enumerate all 2^n wildcard
+ * combinations.  Beyond this threshold the function falls back to a linear
+ * set of variants (exact path + single-segment wildcards) to prevent
+ * exponential CPU usage on deeply nested payloads.  12 segments -> 4 096
+ * variants, which is a comfortable upper bound for real-world config shapes.
+ */
+const WILDCARD_MAX_SEGMENTS = 12;
+
+/**
  * Generate all wildcard-expanded variants of a dotted config path.
  * For "a.b.c" returns ["a.b.c", "a.b.*", "a.*.c", "*.b.c", "a.*.*", "*.b.*", "*.*.c", "*.*.*"].
  * For single-segment paths, returns [path, "*"].
  * Used to match hints like "plugins.entries.*.apiKey" when the concrete path
  * is "plugins.entries.voice-call.apiKey".
+ *
+ * When the number of segments exceeds {@link WILDCARD_MAX_SEGMENTS} the full
+ * 2^n enumeration is skipped to avoid exponential blowup (a path with 30
+ * segments would otherwise produce >1 billion variants).  Instead the
+ * function returns the exact path plus one variant per segment with that
+ * segment replaced by "*", which still matches all single-wildcard hint
+ * patterns used in practice.
  */
 function wildcardVariants(path: string): string[] {
   const parts = path.split(".");
   if (parts.length <= 1) {
     return [path];
   }
+
+  // For paths with many segments, fall back to a linear set of variants
+  // instead of the full 2^n enumeration to prevent CPU-bound stalls.
+  if (parts.length > WILDCARD_MAX_SEGMENTS) {
+    const variants: string[] = [path];
+    for (let i = 0; i < parts.length; i++) {
+      const segments = parts.slice();
+      segments[i] = "*";
+      variants.push(segments.join("."));
+    }
+    // Also include the all-wildcards variant
+    variants.push(parts.map(() => "*").join("."));
+    return variants;
+  }
+
   // Generate 2^n combinations (each segment can be itself or "*")
   const count = 1 << parts.length;
   const variants: string[] = [];
