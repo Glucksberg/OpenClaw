@@ -473,6 +473,9 @@ export const registerTelegramHandlers = ({
         senderUsername,
       }));
 
+  // Rate-limit the allowlist-empty warning to once per chat ID to avoid log flooding (#27552).
+  const warnedAllowlistEmptyChatIds = new Set<string | number>();
+
   const shouldSkipGroupMessage = (params: {
     isGroup: boolean;
     chatId: string | number;
@@ -555,12 +558,15 @@ export const registerTelegramHandlers = ({
         return true;
       }
       if (policyAccess.reason === "group-policy-allowlist-empty") {
-        // Warn (not verbose) so users notice when allowlist has no allowFrom entries (#27552).
-        logger.warn(
-          { chatId, title: chatTitle, reason: "allowlist-empty" },
-          "Blocked group message: groupPolicy is 'allowlist' but no allowFrom entries are configured. " +
-            'Add allowFrom: ["*"] to allow all senders, or specify allowed user IDs.',
-        );
+        // Warn once per chat ID to avoid log flooding on high-traffic groups (#27552).
+        if (!warnedAllowlistEmptyChatIds.has(chatId)) {
+          warnedAllowlistEmptyChatIds.add(chatId);
+          logger.warn(
+            { chatId, title: chatTitle, reason: "allowlist-empty" },
+            "Blocked group message: groupPolicy is 'allowlist' but no allowFrom entries are configured. " +
+              'Add allowFrom: ["*"] to allow all senders, or specify allowed user IDs.',
+          );
+        }
         return true;
       }
       if (policyAccess.reason === "group-policy-allowlist-unauthorized") {
