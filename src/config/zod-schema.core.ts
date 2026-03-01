@@ -224,7 +224,19 @@ export const ModelDefinitionSchema = z
   })
   .strict();
 
-export const ModelProviderSchema = z
+// Minimal disable-only entry: users may write { "enabled": false } to suppress
+// a provider (e.g. an implicit ambient-credential provider) without supplying a
+// full baseUrl / models config block.  All other fields are forbidden so stray
+// config keys are still caught by strict mode.
+const ModelProviderDisabledSchema = z
+  .object({
+    enabled: z.literal(false),
+  })
+  .strict();
+
+// Full provider entry (enabled: true or omitted).  baseUrl and models remain
+// required here so that an accidentally-incomplete provider block is rejected.
+const ModelProviderEnabledSchema = z
   .object({
     enabled: z.boolean().optional(),
     baseUrl: z.string().min(1),
@@ -239,6 +251,8 @@ export const ModelProviderSchema = z
     models: z.array(ModelDefinitionSchema),
   })
   .strict();
+
+export const ModelProviderSchema = z.union([ModelProviderDisabledSchema, ModelProviderEnabledSchema]);
 
 export const BedrockDiscoverySchema = z
   .object({

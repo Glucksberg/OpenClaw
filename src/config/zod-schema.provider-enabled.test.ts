@@ -60,4 +60,33 @@ describe("models.providers.*.enabled schema validation", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts disable-only stub { enabled: false } without baseUrl or models", () => {
+    // Users must be able to disable implicit/ambient providers (e.g. github-copilot,
+    // amazon-bedrock) without providing a full configuration block.
+    const result = OpenClawSchema.safeParse({
+      models: {
+        providers: {
+          "github-copilot": { enabled: false },
+          "amazon-bedrock": { enabled: false },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects disable-only stub with extra unknown fields", () => {
+    // The disabled schema uses strict mode — extra keys should be rejected.
+    const result = OpenClawSchema.safeParse({
+      models: {
+        providers: {
+          "test-provider": {
+            enabled: false,
+            unknownField: "should-fail",
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
 });

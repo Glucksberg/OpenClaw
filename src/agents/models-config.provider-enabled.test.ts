@@ -290,18 +290,16 @@ describe("models-config provider enabled flag", () => {
         );
 
         // Disable using aliases ("qwen" -> "qwen-portal", "doubao" -> "volcengine").
-        const cfg: OpenClawConfig = {
+        // Use `as unknown as OpenClawConfig` because TypeScript types require baseUrl/models on
+        // provider entries, but the Zod schema explicitly allows { enabled: false } stubs.
+        const cfg = {
           models: {
             providers: {
-              qwen: {
-                enabled: false,
-              },
-              doubao: {
-                enabled: false,
-              },
+              qwen: { enabled: false },
+              doubao: { enabled: false },
             },
           },
-        };
+        } as unknown as OpenClawConfig;
 
         await ensureOpenClawModelsJson(cfg, agentDir);
 
@@ -345,15 +343,15 @@ describe("models-config provider enabled flag", () => {
           );
 
           // Disable using the "aws-bedrock" alias (canonical: "amazon-bedrock").
-          const cfg: OpenClawConfig = {
+          // Use `as unknown as OpenClawConfig` because TypeScript types require baseUrl/models on
+          // provider entries, but the Zod schema explicitly allows { enabled: false } stubs.
+          const cfg = {
             models: {
               providers: {
-                "aws-bedrock": {
-                  enabled: false,
-                },
+                "aws-bedrock": { enabled: false },
               },
             },
-          };
+          } as unknown as OpenClawConfig;
 
           await ensureOpenClawModelsJson(cfg, agentDir);
 
@@ -388,15 +386,15 @@ describe("models-config provider enabled flag", () => {
         });
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-        const cfg: OpenClawConfig = {
+        // Use `as unknown as OpenClawConfig` because TypeScript types require baseUrl/models on
+        // provider entries, but the Zod schema explicitly allows { enabled: false } stubs.
+        const cfg = {
           models: {
             providers: {
-              "github-copilot": {
-                enabled: false,
-              },
+              "github-copilot": { enabled: false },
             },
           },
-        };
+        } as unknown as OpenClawConfig;
 
         const result = await ensureOpenClawModelsJson(cfg, agentDir);
 
