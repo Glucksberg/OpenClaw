@@ -30,9 +30,9 @@ export const updateHandlers: GatewayRequestHandlers = {
         ? Math.max(1000, Math.floor(timeoutMsRaw))
         : undefined;
 
+    const config = loadConfig();
     let result: Awaited<ReturnType<typeof runGatewayUpdate>>;
     try {
-      const config = loadConfig();
       const configChannel = normalizeUpdateChannel(config.update?.channel);
       const root =
         (await resolveOpenClawPackageRoot({

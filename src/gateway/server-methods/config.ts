@@ -182,8 +182,9 @@ function buildConfigRestartSentinelPayload(params: {
   deliveryContext: ReturnType<typeof extractDeliveryInfo>["deliveryContext"];
   threadId: ReturnType<typeof extractDeliveryInfo>["threadId"];
   note: string | undefined;
+  config: OpenClawConfig;
 }): RestartSentinelPayload {
-  const config = loadConfig();
+  const { config } = params;
   return {
     kind: params.kind,
     status: "ok",
@@ -373,6 +374,7 @@ export const configHandlers: GatewayRequestHandlers = {
       deliveryContext,
       threadId,
       note,
+      config: validated.config,
     });
     const sentinelPath = await tryWriteRestartSentinelPayload(payload);
     const restart = scheduleGatewaySigusr1Restart({
@@ -433,6 +435,7 @@ export const configHandlers: GatewayRequestHandlers = {
       deliveryContext,
       threadId,
       note,
+      config: parsed.config,
     });
     const sentinelPath = await tryWriteRestartSentinelPayload(payload);
     const restart = scheduleGatewaySigusr1Restart({
