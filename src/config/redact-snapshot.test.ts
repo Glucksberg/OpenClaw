@@ -856,9 +856,9 @@ describe("redactConfigSnapshot", () => {
       broadcast: Record<string, string[]>;
     };
 
-    // All env values are treated as sensitive (defense in depth)
+    // GROQ_API_KEY matches the key-name pattern; NODE_ENV does not
     expect(config.env.GROQ_API_KEY).toBe(REDACTED_SENTINEL);
-    expect(config.env.NODE_ENV).toBe(REDACTED_SENTINEL);
+    expect(config.env.NODE_ENV).toBe("production");
     expect(config.skills.entries.web_search.env.GEMINI_API_KEY).toBe(REDACTED_SENTINEL);
     expect(config.skills.entries.web_search.env.BRAVE_REGION).toBe(REDACTED_SENTINEL);
     expect(config.broadcast.apiToken).toEqual([REDACTED_SENTINEL, REDACTED_SENTINEL]);

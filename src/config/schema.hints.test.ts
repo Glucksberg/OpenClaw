@@ -136,9 +136,6 @@ describe("mapSensitivePaths", () => {
     expect(hints["channels.googlechat.serviceAccount"]?.sensitive).toBe(true);
     expect(hints["gateway.auth.token"]?.sensitive).toBe(true);
     expect(hints["skills.entries.*.apiKey"]?.sensitive).toBe(true);
-    // Env values are treated as sensitive to ensure consistent redaction
-    expect(hints["env.*"]?.sensitive).toBe(true);
-    expect(hints["env.vars.*"]?.sensitive).toBe(true);
     expect(hints["skills.entries.*.env.*"]?.sensitive).toBe(true);
   });
 });

@@ -161,12 +161,9 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
-        // Env vars commonly hold secrets (API keys, tokens, credentials),
-        // so both `vars` record values and top-level catchall values are
-        // marked sensitive to ensure consistent redaction in the dashboard.
-        vars: z.record(z.string(), z.string().register(sensitive)).optional(),
+        vars: z.record(z.string(), z.string()).optional(),
       })
-      .catchall(z.string().register(sensitive))
+      .catchall(z.string())
       .optional(),
     wizard: z
       .object({
