@@ -32,11 +32,13 @@ src/config/schema.irc.ts                @vignesh07
 src/telegram/                           @joshp123 @obviyus
 extensions/telegram/                    @joshp123 @obviyus
 src/channels/telegram/                  @joshp123 @obviyus
+src/channels/plugins/                   @joshp123 @obviyus @thewilloftheshadow
+src/channels/plugins/actions/discord/   @thewilloftheshadow
 
 # ──────────────────────────────────────
-# Gateway / API — @joshp123
+# Gateway / API — @joshp123, @joshavant, @visionik
 # ──────────────────────────────────────
-src/gateway/                            @joshp123
+src/gateway/                            @joshp123 @joshavant @visionik
 
 # ──────────────────────────────────────
 # iOS app — @obviyus, @mbelinky, @ngutman
@@ -91,11 +93,11 @@ src/infra/net/fetch-guard.ssrf.test.ts  @mbelinky @vincentkoc @joshavant
 # ──────────────────────────────────────
 # JS Infra, CI, packaging — @cpojer
 # ──────────────────────────────────────
-package.json                            @cpojer
+/package.json                           @cpojer
 pnpm-lock.yaml                          @cpojer
 tsconfig*.json                          @cpojer
 rollup*.js                              @cpojer
-.github/workflows/                      @cpojer
+.github/workflows/                      @cpojer @onutc
 scripts/                                @cpojer
 
 # ──────────────────────────────────────
@@ -140,3 +142,8 @@ extensions/whatsapp/                    @joshp123
 # Android app (unclaimed — default owner)
 # ──────────────────────────────────────
 apps/android/                           @steipete
+
+# ──────────────────────────────────────
+# Tlon / Urbit — @jalehman
+# ──────────────────────────────────────
+extensions/tlon/                        @jalehman
