@@ -5,8 +5,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { sameFileIdentity } from "./file-identity.js";
-import { assertNoPathAliasEscape } from "./path-alias-guards.js";
 import { expandHomePrefix } from "./home-dir.js";
+import { assertNoPathAliasEscape } from "./path-alias-guards.js";
 import { isNotFoundPathError, isPathInside, isSymlinkOpenError } from "./path-guards.js";
 
 export type SafeOpenErrorCode =
@@ -49,6 +49,16 @@ const OPEN_WRITE_FLAGS =
   (SUPPORTS_NOFOLLOW ? fsConstants.O_NOFOLLOW : 0);
 
 const ensureTrailingSep = (value: string) => (value.endsWith(path.sep) ? value : value + path.sep);
+
+async function expandRelativePathWithHome(relativePath: string): Promise<string> {
+  let home = process.env.HOME || process.env.USERPROFILE || os.homedir();
+  try {
+    home = await fs.realpath(home);
+  } catch {
+    // If the home dir cannot be canonicalized, keep lexical expansion behavior.
+  }
+  return expandHomePrefix(relativePath, { home });
+}
 
 async function openVerifiedLocalFile(
   filePath: string,
@@ -121,7 +131,7 @@ export async function openFileWithinRoot(params: {
     throw err;
   }
   const rootWithSep = ensureTrailingSep(rootReal);
-  const expanded = expandHomePrefix(params.relativePath, { home: os.homedir() });
+  const expanded = await expandRelativePathWithHome(params.relativePath);
   const resolved = path.resolve(rootWithSep, expanded);
   if (!isPathInside(rootWithSep, resolved)) {
     throw new SafeOpenError("outside-workspace", "file is outside workspace root");
@@ -191,7 +201,7 @@ export async function writeFileWithinRoot(params: {
     throw err;
   }
   const rootWithSep = ensureTrailingSep(rootReal);
-  const expanded = expandHomePrefix(params.relativePath, { home: os.homedir() });
+  const expanded = await expandRelativePathWithHome(params.relativePath);
   const resolved = path.resolve(rootWithSep, expanded);
   if (!isPathInside(rootWithSep, resolved)) {
     throw new SafeOpenError("outside-workspace", "file is outside workspace root");
