@@ -264,8 +264,10 @@ or configuration changes, even though retrieval still returns good results.
 
 **Check:**
 
-- Compare the current system prompt (visible via `/context list`) against a known
-  good version.
+- Compare the current system prompt against a known good version. Note: `/context list`
+  shows a **size breakdown** (chars/tokens per file), not the prompt text itself —
+  to inspect the actual content, read the workspace files directly (e.g.
+  `cat AGENTS.md` or `git diff HEAD~1 -- AGENTS.md`).
 - Look for accidental overwrites in workspace bootstrap files (`BOOTSTRAP.md`,
   `AGENTS.md`).
 - See [System Prompt](/concepts/system-prompt) for the prompt assembly order.
@@ -337,7 +339,7 @@ inputs, burning tokens without making progress.
     tools: {
       loopDetection: {
         enabled: true,
-        repeatThreshold: 3,
+        warningThreshold: 3,
         criticalThreshold: 6,
       },
     },
