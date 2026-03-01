@@ -224,9 +224,10 @@ export async function handleTelegramAction(
     });
     const quoteText = readStringParam(params, "quoteText");
     // Per-message link preview control (maps to Telegram API link_preview_options).
+    const rawLinkPreviewOptions = params.linkPreviewOptions ?? params.link_preview_options;
     const linkPreviewOptions =
-      params.linkPreviewOptions != null && typeof params.linkPreviewOptions === "object"
-        ? (params.linkPreviewOptions as {
+      rawLinkPreviewOptions != null && typeof rawLinkPreviewOptions === "object"
+        ? (rawLinkPreviewOptions as {
             is_disabled?: boolean;
             url?: string;
             prefer_small_media?: boolean;
