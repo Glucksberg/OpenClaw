@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
+import { normalizeHostname } from "../../infra/net/hostname.js";
 import { isBlockedHostnameOrIp, SsrFBlockedError, type SsrFPolicy } from "../../infra/net/ssrf.js";
 import { logDebug } from "../../logger.js";
 import { wrapExternalContent, wrapWebContent } from "../../security/external-content.js";
@@ -147,26 +148,63 @@ function resolveFetchSsrFPolicy(fetch?: WebFetchConfig): SsrFPolicy | undefined 
  * (i.e. it's a private/internal address) but is only reachable because `ssrfPolicy`
  * relaxes the restrictions.  In that case we must NOT forward the URL to external
  * services like Firecrawl, since doing so would leak internal hostnames/paths.
+ *
+ * Detection is pre-DNS (hostname literal only).  Private-range checks cover literal IPs
+ * and well-known blocked hostnames.  Hostname allowlist entries are treated as
+ * potentially internal regardless of DNS resolution outcome, because they are added
+ * precisely to grant access to hosts that would otherwise be blocked.
  */
 function isPrivateNetworkUrl(url: string, policy?: SsrFPolicy): boolean {
   if (!policy) {
     return false;
   }
-  const hasRelaxedPolicy =
-    policy.dangerouslyAllowPrivateNetwork === true ||
-    policy.allowPrivateNetwork === true ||
-    policy.allowRfc2544BenchmarkRange === true ||
-    (Array.isArray(policy.allowedHostnames) && policy.allowedHostnames.length > 0);
-  if (!hasRelaxedPolicy) {
-    return false;
-  }
+  let hostname: string;
   try {
-    const parsed = new URL(url);
-    // Check whether the hostname would be blocked under the *default* (no-policy) SSRF rules.
-    return isBlockedHostnameOrIp(parsed.hostname);
+    hostname = normalizeHostname(new URL(url).hostname);
   } catch {
     return false;
   }
+  if (!hostname) {
+    return false;
+  }
+
+  // If the hostname is literally a private/blocked IP or known-blocked hostname under the
+  // default (no-policy) rules, it's private regardless of which policy flag allowed it.
+  if (isBlockedHostnameOrIp(hostname)) {
+    return true;
+  }
+
+  // Hostnames explicitly listed in allowedHostnames are whitelisted because they would
+  // otherwise fail SSRF checks — treat them as internal and never forward to Firecrawl.
+  if (Array.isArray(policy.allowedHostnames) && policy.allowedHostnames.length > 0) {
+    const normalizedAllowedHostnames = policy.allowedHostnames
+      .map((h) => normalizeHostname(h))
+      .filter(Boolean);
+    if (normalizedAllowedHostnames.includes(hostname)) {
+      return true;
+    }
+  }
+
+  // Hostnames matched by hostnameAllowlist patterns are similarly treated as internal.
+  if (Array.isArray(policy.hostnameAllowlist) && policy.hostnameAllowlist.length > 0) {
+    for (const pattern of policy.hostnameAllowlist) {
+      const normalizedPattern = normalizeHostname(pattern);
+      if (!normalizedPattern) {
+        continue;
+      }
+      if (normalizedPattern.startsWith("*.")) {
+        // Wildcard: *.example.com matches sub.example.com but not example.com itself.
+        const suffix = normalizedPattern.slice(2);
+        if (suffix && hostname !== suffix && hostname.endsWith(`.${suffix}`)) {
+          return true;
+        }
+      } else if (hostname === normalizedPattern) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function resolveFetchMaxCharsCap(fetch?: WebFetchConfig): number {
