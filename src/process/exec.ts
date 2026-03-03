@@ -225,16 +225,25 @@ export async function runCommandWithTimeout(
   const stdio = resolveCommandStdio({ hasInput, preferInherit: true });
   const finalArgv = process.platform === "win32" ? (resolveNpmArgvForWindows(argv) ?? argv) : argv;
   const resolvedCommand = finalArgv !== argv ? (finalArgv[0] ?? "") : resolveCommand(argv[0] ?? "");
-  const child = spawn(resolvedCommand, finalArgv.slice(1), {
-    stdio,
-    cwd,
-    env: resolvedEnv,
-    windowsHide: true,
-    windowsVerbatimArguments,
-    ...(shouldSpawnWithShell({ resolvedCommand, platform: process.platform })
-      ? { shell: true }
-      : {}),
-  });
+  // On Windows, .cmd/.bat files cannot be spawned directly since Node 18.20.2
+  // (CVE-2024-27980); they require a cmd.exe /d /s /c wrapper to avoid EINVAL.
+  const useCmdWrapper = isWindowsBatchCommand(resolvedCommand);
+  const child = spawn(
+    useCmdWrapper ? (process.env.ComSpec ?? "cmd.exe") : resolvedCommand,
+    useCmdWrapper
+      ? ["/d", "/s", "/c", buildCmdExeCommandLine(resolvedCommand, finalArgv.slice(1))]
+      : finalArgv.slice(1),
+    {
+      stdio,
+      cwd,
+      env: resolvedEnv,
+      windowsHide: true,
+      windowsVerbatimArguments: useCmdWrapper ? true : windowsVerbatimArguments,
+      ...(shouldSpawnWithShell({ resolvedCommand, platform: process.platform })
+        ? { shell: true }
+        : {}),
+    },
+  );
   // Spawn with inherited stdin (TTY) so tools like `pi` stay interactive when needed.
   return await new Promise((resolve, reject) => {
     let stdout = "";
