@@ -125,7 +125,7 @@ describe("resolveIMessageInboundDecision group allowlist bypass (is_group=false)
     },
   } as unknown as OpenClawConfig;
 
-  it("blocks message from excluded group even when is_group=false", () => {
+  it("blocks real group message (is_group=true) whose chat_id is not in allowlist", () => {
     const logVerbose = vi.fn();
     const decision = resolveIMessageInboundDecision({
       cfg: cfgWithGroupAllowlist,
@@ -135,7 +135,7 @@ describe("resolveIMessageInboundDecision group allowlist bypass (is_group=false)
         sender: "thomas@fraley.me",
         text: "hello",
         is_from_me: false,
-        is_group: false,
+        is_group: true,
         chat_id: 5,
       },
       opts: undefined,
@@ -156,7 +156,40 @@ describe("resolveIMessageInboundDecision group allowlist bypass (is_group=false)
     expect(logVerbose).toHaveBeenCalledWith(expect.stringContaining("pre-isGroup enforcement"));
   });
 
-  it("blocks message from excluded group when is_group is null/undefined", () => {
+  it("does not block DM (is_group=false) with a chat_id not in the group allowlist", () => {
+    // A DM may carry a chat_id but should never be rejected by the group allowlist guard.
+    const logVerbose = vi.fn();
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithGroupAllowlist,
+      accountId: "default",
+      message: {
+        id: 201,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: false,
+        chat_id: 5,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose,
+    });
+
+    expect(decision.kind).toBe("dispatch");
+    expect(logVerbose).not.toHaveBeenCalledWith(expect.stringContaining("pre-isGroup enforcement"));
+  });
+
+  it("does not block DM (is_group=null) with a chat_id not in the group allowlist", () => {
+    // null/undefined is_group must not trigger the group allowlist guard.
     const decision = resolveIMessageInboundDecision({
       cfg: cfgWithGroupAllowlist,
       accountId: "default",
@@ -182,7 +215,47 @@ describe("resolveIMessageInboundDecision group allowlist bypass (is_group=false)
       logVerbose: undefined,
     });
 
-    expect(decision).toEqual({ kind: "drop", reason: "group id not in allowlist" });
+    expect(decision.kind).toBe("dispatch");
+  });
+
+  it("does not block DM when groupPolicy is disabled (guard must not fire for non-group messages)", () => {
+    const cfgWithDisabledGroupPolicy: OpenClawConfig = {
+      channels: {
+        imessage: {
+          groupPolicy: "disabled",
+          groups: {
+            "3": {},
+          },
+        },
+      },
+    } as unknown as OpenClawConfig;
+
+    const decision = resolveIMessageInboundDecision({
+      cfg: cfgWithDisabledGroupPolicy,
+      accountId: "default",
+      message: {
+        id: 205,
+        sender: "thomas@fraley.me",
+        text: "hello",
+        is_from_me: false,
+        is_group: false,
+        chat_id: 5,
+      },
+      opts: undefined,
+      messageText: "hello",
+      bodyText: "hello",
+      allowFrom: ["thomas@fraley.me"],
+      groupAllowFrom: [],
+      groupPolicy: "open",
+      dmPolicy: "open",
+      storeAllowFrom: [],
+      historyLimit: 0,
+      groupHistories: new Map(),
+      echoCache: undefined,
+      logVerbose: undefined,
+    });
+
+    expect(decision.kind).toBe("dispatch");
   });
 
   it("allows message from an allowed group when is_group=false", () => {
