@@ -161,6 +161,50 @@ describe("web_fetch Firecrawl fallback suppression for private networks (P1)", (
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("does not call Firecrawl for allowedHostnames non-local internal host (pre-DNS gap)", async () => {
+    // internal.company.com is not a .local/.internal hostname so isBlockedHostnameOrIp returns
+    // false for it — but it's in allowedHostnames, which means it's an internal target allowed
+    // only via policy.  Firecrawl must still be skipped.
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockResolvedValue({
+      hostname: "internal.company.com",
+      addresses: ["10.10.10.10"],
+      lookup: (() => {}) as unknown as ReturnType<typeof ssrf.createPinnedLookup>,
+    });
+
+    const fetchSpy = setMockFetch().mockRejectedValueOnce(new Error("network error"));
+    const tool = await createWebFetchToolForTest({
+      firecrawl: { enabled: true, apiKey: "fc-test-key" },
+      ssrfPolicy: { allowedHostnames: ["internal.company.com"] },
+    });
+
+    await expect(
+      tool?.execute?.("call", { url: "http://internal.company.com/api" }),
+    ).rejects.toThrow("network error");
+    // Firecrawl must NOT be called — only the direct fetch.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call Firecrawl for hostnameAllowlist wildcard-matched internal host", async () => {
+    // *.corp.internal is a hostnameAllowlist pattern; the matched hostname is not a literal
+    // .local/.internal TLD but is treated as internal because it was explicitly allowlisted.
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockResolvedValue({
+      hostname: "api.corp.internal",
+      addresses: ["172.16.5.20"],
+      lookup: (() => {}) as unknown as ReturnType<typeof ssrf.createPinnedLookup>,
+    });
+
+    const fetchSpy = setMockFetch().mockRejectedValueOnce(new Error("ETIMEDOUT"));
+    const tool = await createWebFetchToolForTest({
+      firecrawl: { enabled: true, apiKey: "fc-test-key" },
+      ssrfPolicy: { hostnameAllowlist: ["*.corp.internal"] },
+    });
+
+    await expect(
+      tool?.execute?.("call", { url: "http://api.corp.internal/v1/data" }),
+    ).rejects.toThrow("ETIMEDOUT");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("still calls Firecrawl for public URLs when ssrfPolicy is set", async () => {
     lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 
