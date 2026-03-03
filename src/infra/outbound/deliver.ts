@@ -48,7 +48,6 @@ export type { NormalizedOutboundPayload } from "./payloads.js";
 export { normalizeOutboundPayloads } from "./payloads.js";
 
 const log = createSubsystemLogger("outbound/deliver");
-const TELEGRAM_TEXT_LIMIT = 4096;
 
 type SendMatrixMessage = (
   to: string,
@@ -73,7 +72,7 @@ export type OutboundSendDeps = {
   sendMSTeams?: (
     to: string,
     text: string,
-    opts?: { mediaUrl?: string; mediaLocalRoots?: readonly string[] },
+    opts?: { mediaUrl?: string },
   ) => Promise<{ messageId: string; conversationId: string }>;
 };
 
@@ -474,6 +473,7 @@ export async function deliverOutboundPayloads(
         replyToId: params.replyToId,
         bestEffort: params.bestEffort,
         gifPlayback: params.gifPlayback,
+        fileName: params.fileName,
         silent: params.silent,
         mirror: params.mirror,
       }).catch(() => null); // Best-effort — don't block delivery if queue write fails.
@@ -545,15 +545,11 @@ async function deliverOutboundPayloadsCore(
     silent: params.silent,
     mediaLocalRoots,
   });
-  const configuredTextLimit = handler.chunker
+  const textLimit = handler.chunker
     ? resolveTextChunkLimit(cfg, channel, accountId, {
         fallbackLimit: handler.textChunkLimit,
       })
     : undefined;
-  const textLimit =
-    channel === "telegram" && typeof configuredTextLimit === "number"
-      ? Math.min(configuredTextLimit, TELEGRAM_TEXT_LIMIT)
-      : configuredTextLimit;
   const chunkMode = handler.chunker ? resolveChunkMode(cfg, channel, accountId) : "length";
   const isSignalChannel = channel === "signal";
   const signalTableMode = isSignalChannel

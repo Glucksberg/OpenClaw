@@ -39,6 +39,8 @@ type QueuedDeliveryPayload = {
   replyToId?: string | null;
   bestEffort?: boolean;
   gifPlayback?: boolean;
+  /** Explicit document filename for file attachments (e.g. WhatsApp documents). */
+  fileName?: string;
   silent?: boolean;
   mirror?: DeliveryMirrorPayload;
 };
@@ -95,6 +97,7 @@ export async function enqueueDelivery(
     replyToId: params.replyToId,
     bestEffort: params.bestEffort,
     gifPlayback: params.gifPlayback,
+    fileName: params.fileName,
     silent: params.silent,
     mirror: params.mirror,
     retryCount: 0,
@@ -340,6 +343,7 @@ export async function recoverPendingDeliveries(opts: {
         replyToId: entry.replyToId,
         bestEffort: entry.bestEffort,
         gifPlayback: entry.gifPlayback,
+        fileName: entry.fileName,
         silent: entry.silent,
         mirror: entry.mirror,
         skipQueue: true, // Prevent re-enqueueing during recovery
