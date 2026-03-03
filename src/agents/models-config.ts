@@ -16,12 +16,6 @@ type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 
 const DEFAULT_MODE: NonNullable<ModelsConfig["mode"]> = "merge";
 
-function resolvePreferredTokenLimit(explicitValue: number, implicitValue: number): number {
-  // Keep catalog refresh behavior for stale low values while preserving
-  // intentional larger user overrides (for example Ollama >128k contexts).
-  return explicitValue > implicitValue ? explicitValue : implicitValue;
-}
-
 function mergeProviderModels(implicit: ProviderConfig, explicit: ProviderConfig): ProviderConfig {
   const implicitModels = Array.isArray(implicit.models) ? implicit.models : [];
   const explicitModels = Array.isArray(explicit.models) ? explicit.models : [];
@@ -62,11 +56,8 @@ function mergeProviderModels(implicit: ProviderConfig, explicit: ProviderConfig)
       ...explicitModel,
       input: implicitModel.input,
       reasoning: "reasoning" in explicitModel ? explicitModel.reasoning : implicitModel.reasoning,
-      contextWindow: resolvePreferredTokenLimit(
-        explicitModel.contextWindow,
-        implicitModel.contextWindow,
-      ),
-      maxTokens: resolvePreferredTokenLimit(explicitModel.maxTokens, implicitModel.maxTokens),
+      contextWindow: implicitModel.contextWindow,
+      maxTokens: implicitModel.maxTokens,
     };
   });
 
@@ -132,11 +123,18 @@ export async function ensureOpenClawModelsJson(
     Object.entries(rawProviders).filter(([, p]) => p.enabled !== false),
   );
   const implicitProviders = await resolveImplicitProviders({ agentDir, explicitProviders });
-  // Suppress implicit providers whose ID was explicitly disabled in config,
-  // so ambient credentials (e.g. MINIMAX_API_KEY) don't re-add a disabled provider.
+  // Suppress implicit providers whose canonical ID (or the canonical ID of their
+  // base, for companion "-plan" entries) matches a disabled config entry.
+  // This ensures that aliases like "doubao" → "volcengine" also suppress the
+  // implicitly-added "volcengine-plan" companion provider.
   if (implicitProviders) {
-    for (const id of disabledIds) {
-      delete implicitProviders[id];
+    for (const key of Object.keys(implicitProviders)) {
+      const normalized = normalizeProviderId(key);
+      // Strip a trailing "-plan" suffix so companion providers follow the base.
+      const base = normalized.endsWith("-plan") ? normalized.slice(0, -"-plan".length) : normalized;
+      if (disabledIds.has(normalized) || disabledIds.has(base)) {
+        delete implicitProviders[key];
+      }
     }
   }
   const providers: Record<string, ProviderConfig> = mergeProviders({
@@ -178,7 +176,13 @@ export async function ensureOpenClawModelsJson(
         // Skip providers explicitly disabled in config — toggling enabled: false
         // must remove the provider from the merged output, not preserve the stale entry.
         // Normalize the existing key so alias-keyed stale entries are also caught.
-        if (disabledIds.has(key) || disabledIds.has(normalizeProviderId(key))) {
+        // Also handle companion "-plan" providers: if the base provider is disabled,
+        // its companion (e.g. "volcengine-plan" when "doubao" is disabled) must also go.
+        const normalizedKey = normalizeProviderId(key);
+        const baseKey = normalizedKey.endsWith("-plan")
+          ? normalizedKey.slice(0, -"-plan".length)
+          : normalizedKey;
+        if (disabledIds.has(key) || disabledIds.has(normalizedKey) || disabledIds.has(baseKey)) {
           continue;
         }
         mergedProviders[key] = entry;

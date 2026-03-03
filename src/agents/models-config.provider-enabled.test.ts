@@ -407,4 +407,67 @@ describe("models-config provider enabled flag", () => {
       });
     });
   });
+
+  it("suppresses companion -plan provider when base provider is disabled via alias", async () => {
+    await withTempHome(async (home) => {
+      await withTempEnv(
+        [...MODELS_CONFIG_IMPLICIT_ENV_VARS, "VOLCENGINE_API_KEY"],
+        async () => {
+          unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
+
+          const agentDir = path.join(home, "agent-plan-companion-disable");
+          process.env.OPENCLAW_AGENT_DIR = agentDir;
+          process.env.PI_CODING_AGENT_DIR = agentDir;
+
+          // Set the volcengine API key so the implicit resolver would normally
+          // add both "volcengine" and "volcengine-plan" providers.
+          process.env.VOLCENGINE_API_KEY = "volc-test-key";
+
+          // Seed models.json with both the base and companion providers so we can
+          // verify that merge-mode cleanup removes both.
+          await fs.mkdir(agentDir, { recursive: true });
+          await fs.writeFile(
+            path.join(agentDir, "models.json"),
+            JSON.stringify(
+              {
+                providers: {
+                  volcengine: {
+                    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+                    apiKey: "VOLCENGINE_API_KEY",
+                    models: [{ id: "doubao-model", name: "Doubao" }],
+                  },
+                  "volcengine-plan": {
+                    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+                    apiKey: "VOLCENGINE_API_KEY",
+                    models: [{ id: "doubao-coding", name: "Doubao Coding" }],
+                  },
+                },
+              },
+              null,
+              2,
+            ),
+          );
+
+          // Disable using the "doubao" alias (canonical: "volcengine").
+          // Use `as unknown as OpenClawConfig` because TypeScript types require baseUrl/models on
+          // provider entries, but the Zod schema explicitly allows { enabled: false } stubs.
+          const cfg = {
+            models: {
+              providers: {
+                doubao: { enabled: false },
+              },
+            },
+          } as unknown as OpenClawConfig;
+
+          await ensureOpenClawModelsJson(cfg, agentDir);
+
+          const raw = await fs.readFile(path.join(agentDir, "models.json"), "utf8");
+          const parsed = JSON.parse(raw) as { providers: Record<string, ProviderConfig> };
+          // Both the base and companion providers must be removed.
+          expect(parsed.providers["volcengine"]).toBeUndefined();
+          expect(parsed.providers["volcengine-plan"]).toBeUndefined();
+        },
+      );
+    });
+  });
 });

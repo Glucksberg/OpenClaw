@@ -47,6 +47,11 @@ export type ModelDefinitionConfig = {
   compat?: ModelCompatConfig;
 };
 
+// Full provider entry.  Note: the Zod schema (ModelProviderDisabledSchema in
+// zod-schema.core.ts) also accepts a minimal disable-only stub
+// { "enabled": false } with no other fields; that stub is filtered before it
+// reaches any code that reads baseUrl/models, so the TypeScript type here
+// only needs to represent the full enabled-provider shape.
 export type ModelProviderConfig = {
   enabled?: boolean;
   baseUrl: string;
