@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { discordPlugin } from "../../../extensions/discord/src/channel.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { setActivePluginRegistry } from "../../plugins/runtime.js";
+import { createTestRegistry } from "../../test-utils/channel-plugins.js";
 import {
   resolveHeartbeatDeliveryTarget,
   resolveOutboundTarget,
@@ -157,6 +160,102 @@ describe("resolveOutboundTarget allowFrom fallback enforcement", () => {
       to: "",
       cfg,
       mode: "implicit",
+    });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("resolveOutboundTarget Discord allowFrom enforcement", () => {
+  // Discord has a plugin-level resolveTarget that must enforce allowFrom so
+  // the outbound allowlist cannot be bypassed for DM or channel sends.
+  beforeEach(() => {
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "discord", plugin: discordPlugin, source: "test" }]),
+    );
+  });
+
+  afterEach(() => {
+    setActivePluginRegistry(createTestRegistry());
+  });
+
+  it("rejects discord user-DM target not in allowFrom list", () => {
+    const cfg: OpenClawConfig = {
+      channels: { discord: { allowFrom: ["user:111111111111111111"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "discord",
+      to: "user:999999999999999999",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("allows discord user-DM target that matches allowFrom entry", () => {
+    const cfg: OpenClawConfig = {
+      channels: { discord: { allowFrom: ["111111111111111111"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "discord",
+      to: "user:111111111111111111",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("allows discord target when allowFrom contains wildcard", () => {
+    const cfg: OpenClawConfig = {
+      channels: { discord: { allowFrom: ["*"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "discord",
+      to: "channel:999999999999999999",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("allows discord target when no allowFrom is configured (open)", () => {
+    const cfg: OpenClawConfig = { channels: { discord: {} } };
+    const res = resolveOutboundTarget({
+      channel: "discord",
+      to: "channel:123456789012345678",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("normalizes bare numeric discord IDs and matches allowFrom id entry", () => {
+    // Bare numeric IDs are prefixed with "channel:" by normalizeDiscordOutboundTarget.
+    // The allowFrom entry without prefix should still match.
+    const cfg: OpenClawConfig = {
+      channels: { discord: { allowFrom: ["123456789012345678"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "discord",
+      to: "123456789012345678",
+      cfg,
+      mode: "explicit",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      // Should have been prefixed with "channel:" by the normalizer
+      expect(res.to).toBe("channel:123456789012345678");
+    }
+  });
+
+  it("rejects bare numeric discord channel ID not in allowFrom", () => {
+    const cfg: OpenClawConfig = {
+      channels: { discord: { allowFrom: ["111111111111111111"] } },
+    };
+    const res = resolveOutboundTarget({
+      channel: "discord",
+      to: "999999999999999999",
+      cfg,
+      mode: "explicit",
     });
     expect(res.ok).toBe(false);
   });

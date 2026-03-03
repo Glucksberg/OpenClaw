@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { discordPlugin } from "../../../extensions/discord/src/channel.js";
 import { slackPlugin } from "../../../extensions/slack/src/channel.js";
 import { telegramPlugin } from "../../../extensions/telegram/src/channel.js";
 import { whatsappPlugin } from "../../../extensions/whatsapp/src/channel.js";
@@ -114,13 +115,21 @@ function createAlwaysConfiguredPluginConfig(account: Record<string, unknown> = {
 }
 
 let createPluginRuntime: typeof import("../../plugins/runtime/index.js").createPluginRuntime;
+let setDiscordRuntime: typeof import("../../../extensions/discord/src/runtime.js").setDiscordRuntime;
 let setSlackRuntime: typeof import("../../../extensions/slack/src/runtime.js").setSlackRuntime;
 let setTelegramRuntime: typeof import("../../../extensions/telegram/src/runtime.js").setTelegramRuntime;
 let setWhatsAppRuntime: typeof import("../../../extensions/whatsapp/src/runtime.js").setWhatsAppRuntime;
 
-function installChannelRuntimes(params?: { includeTelegram?: boolean; includeWhatsApp?: boolean }) {
+function installChannelRuntimes(params?: {
+  includeDiscord?: boolean;
+  includeTelegram?: boolean;
+  includeWhatsApp?: boolean;
+}) {
   const runtime = createPluginRuntime();
   setSlackRuntime(runtime);
+  if (params?.includeDiscord) {
+    setDiscordRuntime(runtime);
+  }
   if (params?.includeTelegram !== false) {
     setTelegramRuntime(runtime);
   }
@@ -132,6 +141,7 @@ function installChannelRuntimes(params?: { includeTelegram?: boolean; includeWha
 describe("runMessageAction context isolation", () => {
   beforeAll(async () => {
     ({ createPluginRuntime } = await import("../../plugins/runtime/index.js"));
+    ({ setDiscordRuntime } = await import("../../../extensions/discord/src/runtime.js"));
     ({ setSlackRuntime } = await import("../../../extensions/slack/src/runtime.js"));
     ({ setTelegramRuntime } = await import("../../../extensions/telegram/src/runtime.js"));
     ({ setWhatsAppRuntime } = await import("../../../extensions/whatsapp/src/runtime.js"));
@@ -1373,5 +1383,115 @@ describe("runMessageAction allowlist enforcement for channels without resolveTar
       },
     });
     expect(result.kind).toBe("send");
+  });
+});
+
+describe("runMessageAction allowlist enforcement for Discord (plugin resolveTarget must check allowFrom)", () => {
+  // Discord has a plugin-level resolveTarget that normalizes targets but
+  // previously ignored allowFrom — verifying it now enforces the list.
+  const discordRestrictedConfig = {
+    channels: {
+      discord: {
+        allowFrom: ["111111111111111111"],
+      },
+    },
+  } as OpenClawConfig;
+
+  const discordWildcardConfig = {
+    channels: {
+      discord: {
+        allowFrom: ["*"],
+      },
+    },
+  } as OpenClawConfig;
+
+  const discordOpenConfig = {
+    channels: {
+      discord: {},
+    },
+  } as OpenClawConfig;
+
+  beforeEach(() => {
+    installChannelRuntimes({
+      includeDiscord: true,
+      includeTelegram: false,
+      includeWhatsApp: false,
+    });
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "discord",
+          source: "test",
+          plugin: discordPlugin,
+        },
+      ]),
+    );
+  });
+
+  afterEach(() => {
+    setActivePluginRegistry(createTestRegistry([]));
+  });
+
+  it("blocks send to a discord user-DM target not in the allowFrom list", async () => {
+    await expect(
+      runDrySend({
+        cfg: discordRestrictedConfig,
+        actionParams: {
+          channel: "discord",
+          target: "user:999999999999999999",
+          message: "hello",
+        },
+      }),
+    ).rejects.toThrow(/Target not in allowlist/);
+  });
+
+  it("allows send to a discord target that is in the allowFrom list", async () => {
+    const result = await runDrySend({
+      cfg: discordRestrictedConfig,
+      actionParams: {
+        channel: "discord",
+        target: "user:111111111111111111",
+        message: "hello",
+      },
+    });
+    expect(result.kind).toBe("send");
+  });
+
+  it("allows send when discord allowFrom contains wildcard", async () => {
+    const result = await runDrySend({
+      cfg: discordWildcardConfig,
+      actionParams: {
+        channel: "discord",
+        target: "channel:999999999999999999",
+        message: "hello",
+      },
+    });
+    expect(result.kind).toBe("send");
+  });
+
+  it("allows send when discord allowFrom is empty (open access)", async () => {
+    const result = await runDrySend({
+      cfg: discordOpenConfig,
+      actionParams: {
+        channel: "discord",
+        target: "channel:999999999999999999",
+        message: "hello",
+      },
+    });
+    expect(result.kind).toBe("send");
+  });
+
+  it("normalizes bare numeric discord ID and enforces allowFrom", async () => {
+    // Bare numeric IDs are prefixed with "channel:" — allowFrom must still match.
+    await expect(
+      runDrySend({
+        cfg: discordRestrictedConfig,
+        actionParams: {
+          channel: "discord",
+          target: "999999999999999999",
+          message: "hello",
+        },
+      }),
+    ).rejects.toThrow(/Target not in allowlist/);
   });
 });

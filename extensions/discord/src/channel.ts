@@ -1,4 +1,5 @@
 import {
+  allowListMatches,
   applyAccountNameToChannelSection,
   buildChannelConfigSchema,
   buildTokenChannelStatusSummary,
@@ -14,8 +15,10 @@ import {
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
   looksLikeDiscordTargetId,
+  missingTargetError,
   migrateBaseNameToDefaultAccount,
   normalizeAccountId,
+  normalizeDiscordAllowList,
   normalizeDiscordMessagingTarget,
   normalizeDiscordOutboundTarget,
   PAIRING_APPROVED_MESSAGE,
@@ -104,10 +107,11 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
       configured: Boolean(account.token?.trim()),
       tokenSource: account.tokenSource,
     }),
-    resolveAllowFrom: ({ cfg, accountId }) =>
-      (resolveDiscordAccount({ cfg, accountId }).config.dm?.allowFrom ?? []).map((entry) =>
-        String(entry),
-      ),
+    resolveAllowFrom: ({ cfg, accountId }) => {
+      const config = resolveDiscordAccount({ cfg, accountId }).config;
+      // Use top-level allowFrom when set; fall back to dm.allowFrom for legacy configs.
+      return (config.allowFrom ?? config.dm?.allowFrom ?? []).map((entry) => String(entry));
+    },
     formatAllowFrom: ({ allowFrom }) =>
       allowFrom
         .map((entry) => String(entry).trim())
@@ -301,7 +305,32 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
     chunker: null,
     textChunkLimit: 2000,
     pollMaxOptions: 10,
-    resolveTarget: ({ to }) => normalizeDiscordOutboundTarget(to),
+    resolveTarget: ({ to, allowFrom }) => {
+      const normalized = normalizeDiscordOutboundTarget(to);
+      if (!normalized.ok) {
+        return normalized;
+      }
+      // Enforce allowFrom when a non-wildcard list is configured.
+      // allowFrom entries follow the same prefix conventions as the inbound
+      // allowlist ("user:<id>", "discord:<id>", bare IDs, channel slugs).
+      if (allowFrom && allowFrom.length > 0 && !allowFrom.includes("*")) {
+        const list = normalizeDiscordAllowList(allowFrom, ["discord:", "user:", "channel:", "pk:"]);
+        if (list) {
+          // Strip kind prefix ("user:", "channel:", "discord:") for comparison.
+          const rawId = normalized.to
+            .replace(/^(user|channel|discord):/i, "")
+            .trim()
+            .toLowerCase();
+          if (!allowListMatches(list, { id: rawId, name: rawId }, { allowNameMatching: true })) {
+            return {
+              ok: false,
+              error: missingTargetError("Discord", "user:<id> or channel:<id>"),
+            };
+          }
+        }
+      }
+      return normalized;
+    },
     sendText: async ({ cfg, to, text, accountId, deps, replyToId, silent }) => {
       const send = deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
       const result = await send(to, text, {
@@ -347,11 +376,6 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
     defaultRuntime: {
       accountId: DEFAULT_ACCOUNT_ID,
       running: false,
-      connected: false,
-      reconnectAttempts: 0,
-      lastConnectedAt: null,
-      lastDisconnect: null,
-      lastEventAt: null,
       lastStartAt: null,
       lastStopAt: null,
       lastError: null,
@@ -403,11 +427,6 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
         lastStartAt: runtime?.lastStartAt ?? null,
         lastStopAt: runtime?.lastStopAt ?? null,
         lastError: runtime?.lastError ?? null,
-        connected: runtime?.connected ?? false,
-        reconnectAttempts: runtime?.reconnectAttempts,
-        lastConnectedAt: runtime?.lastConnectedAt ?? null,
-        lastDisconnect: runtime?.lastDisconnect ?? null,
-        lastEventAt: runtime?.lastEventAt ?? null,
         application: app ?? undefined,
         bot: bot ?? undefined,
         probe,
@@ -459,7 +478,6 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
         abortSignal: ctx.abortSignal,
         mediaMaxMb: account.config.mediaMaxMb,
         historyLimit: account.config.historyLimit,
-        setStatus: (patch) => ctx.setStatus({ accountId: account.accountId, ...patch }),
       });
     },
   },

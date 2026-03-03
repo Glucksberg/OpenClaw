@@ -1,5 +1,9 @@
 import type { OpenClawConfig } from "../../../config/config.js";
 import {
+  allowListMatches,
+  normalizeDiscordAllowList,
+} from "../../../discord/monitor/allow-list.js";
+import {
   getThreadBindingManager,
   type ThreadBindingRecord,
 } from "../../../discord/monitor/thread-bindings.js";
@@ -9,9 +13,9 @@ import {
   sendWebhookMessageDiscord,
 } from "../../../discord/send.js";
 import type { OutboundIdentity } from "../../../infra/outbound/identity.js";
+import { missingTargetError } from "../../../infra/outbound/target-errors.js";
 import { normalizeDiscordOutboundTarget } from "../normalize/discord.js";
 import type { ChannelOutboundAdapter } from "../types.js";
-import { sendTextMediaPayload } from "./direct-text-media.js";
 
 function resolveDiscordOutboundTarget(params: {
   to: string;
@@ -78,12 +82,43 @@ async function maybeSendDiscordWebhookText(params: {
   return result;
 }
 
+/**
+ * Extract the raw ID from a normalized Discord target for allowFrom comparison.
+ * Strips leading kind prefixes ("user:", "channel:", "discord:") so the ID
+ * can be matched against allowFrom entries that may or may not have prefixes.
+ */
+function extractDiscordTargetId(normalized: string): string {
+  return normalized
+    .replace(/^(user|channel|discord):/i, "")
+    .trim()
+    .toLowerCase();
+}
+
 export const discordOutbound: ChannelOutboundAdapter = {
   deliveryMode: "direct",
   chunker: null,
   textChunkLimit: 2000,
   pollMaxOptions: 10,
-  resolveTarget: ({ to }) => normalizeDiscordOutboundTarget(to),
+  resolveTarget: ({ to, allowFrom }) => {
+    const normalized = normalizeDiscordOutboundTarget(to);
+    if (!normalized.ok) {
+      return normalized;
+    }
+    // Enforce allowFrom when a non-wildcard list is configured.
+    // allowFrom entries use the same prefix conventions as the inbound
+    // allowlist (e.g. "user:<id>", "discord:<id>", bare IDs, or names).
+    if (allowFrom && allowFrom.length > 0 && !allowFrom.includes("*")) {
+      const list = normalizeDiscordAllowList(allowFrom, ["discord:", "user:", "channel:", "pk:"]);
+      if (list) {
+        const rawId = extractDiscordTargetId(normalized.to);
+        // Allow name-based matching so channel slugs in allowFrom work too.
+        if (!allowListMatches(list, { id: rawId, name: rawId }, { allowNameMatching: true })) {
+          return { ok: false, error: missingTargetError("Discord", "user:<id> or channel:<id>") };
+        }
+      }
+    }
+    return normalized;
+  },
   sendPayload: async (ctx) =>
     await sendTextMediaPayload({ channel: "discord", ctx, adapter: discordOutbound }),
   sendText: async ({ cfg, to, text, accountId, deps, replyToId, threadId, identity, silent }) => {
