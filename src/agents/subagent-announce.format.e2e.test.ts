@@ -118,18 +118,14 @@ vi.mock("./tools/agent-step.js", () => ({
   readLatestAssistantReply: readLatestAssistantReplyMock,
 }));
 
-vi.mock("../config/sessions.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/sessions.js")>();
-  return {
-    ...actual,
-    loadSessionStore: vi.fn(() => loadSessionStoreFixture()),
-    resolveAgentIdFromSessionKey: () => "main",
-    resolveStorePath: () => "/tmp/sessions.json",
-    resolveMainSessionKey: () => "agent:main:main",
-    readSessionUpdatedAt: vi.fn(() => undefined),
-    recordSessionMetaFromInbound: vi.fn().mockResolvedValue(undefined),
-  };
-});
+vi.mock("../config/sessions.js", () => ({
+  loadSessionStore: vi.fn(() => loadSessionStoreFixture()),
+  resolveAgentIdFromSessionKey: () => "main",
+  resolveStorePath: () => "/tmp/sessions.json",
+  resolveMainSessionKey: () => "agent:main:main",
+  readSessionUpdatedAt: vi.fn(() => undefined),
+  recordSessionMetaFromInbound: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("./pi-embedded.js", () => embeddedRunMock);
 
@@ -518,6 +514,60 @@ describe("subagent announce formatting", () => {
     expect(didAnnounce).toBe(true);
     expect(sendSpy).not.toHaveBeenCalled();
     expect(agentSpy).not.toHaveBeenCalled();
+  });
+
+  it("strips reply tags from completion delivery message (#24600)", async () => {
+    sessionStore = {
+      "agent:main:subagent:test": { sessionId: "child-session-reply-tags" },
+      "agent:main:main": { sessionId: "requester-session-reply-tags" },
+    };
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-direct-completion-reply-tags",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: { channel: "imessage", to: "+15550001234", accountId: "acct-1" },
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      roundOneReply: "[[reply_to:6100]] Got it. This is a test message.",
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    const call = sendSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    const msg = typeof call?.params?.message === "string" ? call.params.message : "";
+    // Reply directive tag must be stripped before delivery.
+    expect(msg).not.toContain("[[reply_to:");
+    // Actual message text must be preserved.
+    expect(msg).toContain("Got it. This is a test message.");
+  });
+
+  it("preserves MEDIA: directives when stripping reply tags from completion message (#24600)", async () => {
+    sessionStore = {
+      "agent:main:subagent:test": { sessionId: "child-session-media-directives" },
+      "agent:main:main": { sessionId: "requester-session-media-directives" },
+    };
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-direct-completion-media-directives",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: { channel: "imessage", to: "+15550001234", accountId: "acct-1" },
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      roundOneReply: "[[reply_to:6100]] Here is your image.\nMEDIA:/tmp/result.png",
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    const call = sendSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    const msg = typeof call?.params?.message === "string" ? call.params.message : "";
+    // Reply directive tag must be stripped.
+    expect(msg).not.toContain("[[reply_to:");
+    // MEDIA: directive must be preserved in the text for downstream delivery to resolve.
+    expect(msg).toContain("MEDIA:/tmp/result.png");
+    // Human-readable text must be preserved too.
+    expect(msg).toContain("Here is your image.");
   });
 
   it("retries completion direct send on transient channel-unavailable errors", async () => {
