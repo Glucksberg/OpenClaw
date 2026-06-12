@@ -190,6 +190,13 @@ function createPlainHttpError(operation = "sendMessage") {
   });
 }
 
+function createPostSendNetworkError(operation = "sendRichMessage") {
+  return Object.assign(new Error(`Network request for '${operation}' failed!`), {
+    name: "HttpError",
+    error: Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+  });
+}
+
 function createVoiceFailureHarness(params: {
   voiceError: Error;
   sendMessageResult?: { message_id: number; chat: { id: string } };
@@ -846,14 +853,13 @@ describe("deliverReplies", () => {
     expect(sendMessage).toHaveBeenCalledWith("123", "hi <b>boss</b>", { parse_mode: "HTML" });
   });
 
-  it("falls back to sendMessage when rich message sends fail", async () => {
+  it("falls back to sendMessage when the rich message method is unavailable", async () => {
     const runtime = createRuntime();
-    const sendRichMessage = vi.fn().mockRejectedValueOnce(new Error("method not found"));
     const sendMessage = vi.fn().mockResolvedValue({
       message_id: 35,
       chat: { id: "123" },
     });
-    const bot = createBot({ sendRichMessage, sendMessage });
+    const bot = createBot({ sendMessage });
 
     await deliverWith({
       replies: [{ text: "hi **boss**" }],
@@ -862,8 +868,54 @@ describe("deliverReplies", () => {
       richMessagesMode: "auto",
     });
 
-    expect(sendRichMessage).toHaveBeenCalledOnce();
     expect(sendMessage).toHaveBeenCalledWith("123", "hi <b>boss</b>", { parse_mode: "HTML" });
+  });
+
+  it("does not fall back from ambiguous rich message network errors", async () => {
+    const runtime = createRuntime();
+    const sendRichMessage = vi.fn().mockRejectedValueOnce(createPostSendNetworkError());
+    const sendMessage = vi.fn();
+    const bot = createBot({ sendRichMessage, sendMessage });
+
+    await expect(
+      deliverWith({
+        replies: [{ text: "hi **boss**" }],
+        runtime,
+        bot,
+        richMessagesMode: "auto",
+      }),
+    ).rejects.toThrow(/Network request/);
+
+    expect(sendRichMessage).toHaveBeenCalledOnce();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends media follow-up text as a rich message when enabled", async () => {
+    const runtime = createRuntime();
+    const sendPhoto = vi.fn().mockResolvedValue({
+      message_id: 36,
+      chat: { id: "123" },
+    });
+    const sendRichMessage = vi.fn().mockResolvedValue({
+      message_id: 37,
+      chat: { id: "123" },
+    });
+    const sendMessage = vi.fn();
+    const bot = createBot({ sendPhoto, sendRichMessage, sendMessage });
+    mockMediaLoad("photo.jpg", "image/jpeg", "image-bytes");
+
+    await deliverWith({
+      replies: [{ mediaUrl: "https://example.com/photo.jpg", text: `${"a".repeat(1050)} tail` }],
+      runtime,
+      bot,
+      richMessagesMode: "final",
+    });
+
+    expect(sendPhoto).toHaveBeenCalledOnce();
+    expect(sendRichMessage).toHaveBeenCalledOnce();
+    expect(sendRichMessage.mock.calls[0]?.[0]).toBe("123");
+    expect(sendRichMessage.mock.calls[0]?.[1]).toMatchObject({ html: expect.any(String) });
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it("includes message_thread_id for DM topics", async () => {

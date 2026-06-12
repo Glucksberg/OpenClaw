@@ -344,6 +344,7 @@ async function deliverMediaReply(params: {
   onVoiceRecording?: () => Promise<void> | void;
   linkPreview?: boolean;
   silent?: boolean;
+  richMessagesMode?: TelegramRichMessagesMode;
   replyQuoteMessageId?: number;
   replyQuoteText?: string;
   replyQuotePosition?: number;
@@ -500,6 +501,7 @@ async function deliverMediaReply(params: {
               thread: params.thread,
               linkPreview: params.linkPreview,
               silent: params.silent,
+              richMessagesMode: params.richMessagesMode,
               replyMarkup: params.replyMarkup,
               replyQuoteText: params.replyQuoteText,
             });
@@ -531,6 +533,7 @@ async function deliverMediaReply(params: {
                 thread: params.thread,
                 linkPreview: params.linkPreview,
                 silent: params.silent,
+                richMessagesMode: params.richMessagesMode,
                 replyMarkup: params.replyMarkup,
               });
               visibleFallbackText = fallbackText;
@@ -894,6 +897,7 @@ export async function deliverReplies(params: {
           replyQuotePosition: replyQuote.position,
           replyQuoteEntities: replyQuote.entities,
           replyMarkup,
+          richMessagesMode: params.richMessagesMode,
           replyToId,
           replyToMode: params.replyToMode,
           progress,

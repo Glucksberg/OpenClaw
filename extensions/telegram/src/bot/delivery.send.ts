@@ -6,7 +6,11 @@ import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { formatErrorMessage } from "openclaw/plugin-sdk/ssrf-runtime";
 import { withTelegramApiErrorLogging } from "../api-logging.js";
 import { markdownToTelegramHtml } from "../format.js";
-import { isSafeToRetrySendError, isTelegramRateLimitError } from "../network-errors.js";
+import {
+  isSafeToRetrySendError,
+  isTelegramClientRejection,
+  isTelegramRateLimitError,
+} from "../network-errors.js";
 import {
   buildTelegramSendParams,
   getTelegramNativeQuoteReplyMessageId,
@@ -21,6 +25,7 @@ export { buildTelegramSendParams } from "../reply-parameters.js";
 const PARSE_ERR_RE = /can't parse entities|parse entities|find end of the entity/i;
 const EMPTY_TEXT_ERR_RE = /message text is empty/i;
 const QUOTE_PARAM_RE = /\bquote not found\b|\bQUOTE_TEXT_INVALID\b|\bquote text invalid\b/i;
+const RICH_MESSAGE_METHOD_UNAVAILABLE_RE = /does not expose sendRichMessage/i;
 const GrammyErrorCtor: typeof GrammyError | undefined =
   typeof GrammyError === "function" ? GrammyError : undefined;
 
@@ -40,6 +45,16 @@ function createTelegramDeliverySendRetry() {
     shouldRetry: (err) => isSafeToRetrySendError(err) || isTelegramRateLimitError(err),
     strictShouldRetry: true,
   });
+}
+
+function isSafeRichMessageFallbackError(err: unknown): boolean {
+  if (isTelegramRateLimitError(err)) {
+    return false;
+  }
+  if (isSafeToRetrySendError(err) || isTelegramClientRejection(err)) {
+    return true;
+  }
+  return RICH_MESSAGE_METHOD_UNAVAILABLE_RE.test(formatErrorMessage(err));
 }
 
 export async function sendTelegramWithThreadFallback<T>(params: {
@@ -175,6 +190,9 @@ export async function sendTelegramText(
       runtime.log?.(`telegram sendRichMessage ok chat=${chatId} message=${messageId}`);
       return Math.trunc(messageId);
     } catch (err) {
+      if (!isSafeRichMessageFallbackError(err)) {
+        throw err;
+      }
       runtime.log?.(
         `telegram rich message send failed; retrying via sendMessage: ${formatErrorMessage(err)}`,
       );
