@@ -918,16 +918,19 @@ export const dispatchTelegramMessage = async ({
   const draftMinInitialChars = streamMode === "progress" ? 0 : DRAFT_MIN_INITIAL_CHARS;
   const progressSeed = `${route.accountId}:${chatId}:${threadSpec.id ?? ""}`;
   const mediaLocalRoots = getAgentScopedMediaLocalRoots(cfg, route.agentId);
+  const richMessagesMode = resolveTelegramRichMessagesMode({ cfg, accountId: route.accountId });
   const createDraftLane = (laneName: LaneName, enabled: boolean): DraftLaneState => {
     const stream = enabled
       ? (telegramDeps.createTelegramDraftStream ?? createTelegramDraftStream)({
           api: bot.api,
           chatId,
+          draftId: msg.message_id || Date.now(),
           maxChars: draftMaxChars,
           thread: threadSpec,
           replyToMessageId: draftReplyToMessageId,
           minInitialChars: draftMinInitialChars,
           renderText: renderStreamText,
+          richMessagesMode,
           onSupersededPreview: (superseded) => {
             if (superseded.retain) {
               lanes[laneName].activeChunkIndex += 1;
@@ -1467,7 +1470,7 @@ export const dispatchTelegramMessage = async ({
     tableMode,
     chunkMode,
     linkPreview: telegramCfg.linkPreview,
-    richMessagesMode: resolveTelegramRichMessagesMode({ cfg, accountId: route.accountId }),
+    richMessagesMode,
     replyQuoteMessageId,
     replyQuoteText,
     replyQuotePosition,

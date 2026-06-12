@@ -4,10 +4,12 @@ import {
   createFinalizableDraftStreamControlsForState,
   takeMessageIdAfterStop,
 } from "openclaw/plugin-sdk/channel-outbound";
+import type { TelegramRichMessagesMode } from "openclaw/plugin-sdk/config-contracts";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { buildTelegramThreadParams, type TelegramThreadSpec } from "./bot/helpers.js";
 import { isSafeToRetrySendError, isTelegramClientRejection } from "./network-errors.js";
 import { normalizeTelegramReplyToMessageId } from "./outbound-params.js";
+import { sendTelegramRichMessageDraft } from "./rich-message.js";
 
 const TELEGRAM_STREAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1000;
@@ -29,6 +31,8 @@ export type TelegramDraftStream = {
   forceNewMessage: () => void;
   /** True when a preview sendMessage was attempted but the response was lost. */
   sendMayHaveLanded?: () => boolean;
+  /** True when the latest preview was delivered through Telegram's ephemeral draft UI. */
+  hasEphemeralPreview?: () => boolean;
 };
 
 type TelegramDraftPreview = {
@@ -50,6 +54,18 @@ function renderTelegramDraftPreview(
 ): TelegramDraftPreview {
   const trimmed = text.trimEnd();
   return renderText?.(trimmed) ?? { text: trimmed };
+}
+
+function shouldUseTelegramRichDraft(params: {
+  mode?: TelegramRichMessagesMode;
+  thread?: TelegramThreadSpec | null;
+  renderedParseMode?: "HTML";
+}): boolean {
+  return (
+    (params.mode === "auto" || params.mode === "draft") &&
+    params.thread?.scope === "dm" &&
+    params.renderedParseMode === "HTML"
+  );
 }
 
 function findTelegramDraftChunkLength(
@@ -76,6 +92,7 @@ function findTelegramDraftChunkLength(
 export function createTelegramDraftStream(params: {
   api: Bot["api"];
   chatId: Parameters<Bot["api"]["sendMessage"]>[0];
+  draftId?: number;
   maxChars?: number;
   thread?: TelegramThreadSpec | null;
   replyToMessageId?: number;
@@ -84,6 +101,8 @@ export function createTelegramDraftStream(params: {
   minInitialChars?: number;
   /** Optional preview renderer (e.g. markdown -> HTML + parse mode). */
   renderText?: (text: string) => TelegramDraftPreview;
+  /** Use Telegram Bot API rich-message drafts when available. */
+  richMessagesMode?: TelegramRichMessagesMode;
   /** Called when a late send resolves after forceNewMessage() switched generations. */
   onSupersededPreview?: (preview: SupersededTelegramPreview) => void;
   log?: (message: string) => void;
@@ -96,6 +115,8 @@ export function createTelegramDraftStream(params: {
   const throttleMs = Math.max(250, params.throttleMs ?? DEFAULT_THROTTLE_MS);
   const minInitialChars = params.minInitialChars;
   const chatId = params.chatId;
+  const rawDraftId = Number.isFinite(params.draftId) ? Math.trunc(params.draftId) : Date.now();
+  const draftId = rawDraftId === 0 ? 1 : Math.abs(rawDraftId);
   const threadParams = buildTelegramThreadParams(params.thread);
   const replyToMessageId = normalizeTelegramReplyToMessageId(params.replyToMessageId);
   const replyParams =
@@ -118,6 +139,8 @@ export function createTelegramDraftStream(params: {
   let previewRevision = 0;
   let generation = 0;
   let deliveredTextOffset = 0;
+  let richDraftDisabled = false;
+  let ephemeralPreviewDelivered = false;
   type PreviewSendParams = {
     renderedText: string;
     renderedParseMode: "HTML" | undefined;
@@ -141,6 +164,7 @@ export function createTelegramDraftStream(params: {
     sendGeneration,
   }: PreviewSendParams): Promise<boolean> => {
     if (typeof streamMessageId === "number") {
+      ephemeralPreviewDelivered = false;
       streamVisibleSinceMs ??= Date.now();
       if (renderedParseMode) {
         await params.api.editMessageText(chatId, streamMessageId, renderedText, {
@@ -172,6 +196,7 @@ export function createTelegramDraftStream(params: {
     }
     const normalizedMessageId = Math.trunc(sentMessageId);
     const visibleSinceMs = Date.now();
+    ephemeralPreviewDelivered = false;
     if (sendGeneration !== generation) {
       params.onSupersededPreview?.({
         messageId: normalizedMessageId,
@@ -184,6 +209,38 @@ export function createTelegramDraftStream(params: {
     }
     streamMessageId = normalizedMessageId;
     streamVisibleSinceMs = visibleSinceMs;
+    return true;
+  };
+  const sendRichDraftTransportPreview = async ({
+    renderedText,
+    sendGeneration,
+  }: PreviewSendParams): Promise<boolean> => {
+    try {
+      await sendTelegramRichMessageDraft({
+        api: params.api,
+        chatId,
+        draftId,
+        richMessage: { html: renderedText },
+        methodParams: threadParams,
+      });
+    } catch (err) {
+      richDraftDisabled = true;
+      params.warn?.(
+        `telegram rich stream draft failed; retrying with message preview: ${formatErrorMessage(
+          err,
+        )}`,
+      );
+      return await sendMessageTransportPreview({
+        renderedText,
+        renderedParseMode: "HTML",
+        sendGeneration,
+      });
+    }
+    if (sendGeneration !== generation) {
+      return true;
+    }
+    streamVisibleSinceMs ??= Date.now();
+    ephemeralPreviewDelivered = true;
     return true;
   };
   const stopOversizedPreview = (renderedText: string): false => {
@@ -265,11 +322,22 @@ export function createTelegramDraftStream(params: {
     lastSentText = renderedText;
     lastSentParseMode = renderedParseMode;
     try {
-      const sent = await sendMessageTransportPreview({
-        renderedText,
-        renderedParseMode,
-        sendGeneration,
-      });
+      const sent =
+        shouldUseTelegramRichDraft({
+          mode: params.richMessagesMode,
+          thread: params.thread,
+          renderedParseMode,
+        }) && !richDraftDisabled
+          ? await sendRichDraftTransportPreview({
+              renderedText,
+              renderedParseMode,
+              sendGeneration,
+            })
+          : await sendMessageTransportPreview({
+              renderedText,
+              renderedParseMode,
+              sendGeneration,
+            });
       if (sent) {
         previewRevision += 1;
         lastDeliveredText = trimmed;
@@ -326,6 +394,8 @@ export function createTelegramDraftStream(params: {
     streamVisibleSinceMs = undefined;
     lastSentText = "";
     lastSentParseMode = undefined;
+    richDraftDisabled = false;
+    ephemeralPreviewDelivered = false;
     if (options?.resetOffset !== false) {
       deliveredTextOffset = 0;
       lastRequestedText = "";
@@ -382,5 +452,6 @@ export function createTelegramDraftStream(params: {
     materialize,
     forceNewMessage,
     sendMayHaveLanded: () => messageSendAttempted && typeof streamMessageId !== "number",
+    hasEphemeralPreview: () => ephemeralPreviewDelivered && typeof streamMessageId !== "number",
   };
 }

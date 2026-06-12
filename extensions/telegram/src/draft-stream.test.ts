@@ -8,6 +8,7 @@ type TelegramDraftStreamParams = Parameters<typeof createTelegramDraftStream>[0]
 function createMockDraftApi(sendMessageImpl?: () => Promise<{ message_id: number }>) {
   return {
     sendMessage: vi.fn(sendMessageImpl ?? (async () => ({ message_id: 17 }))),
+    sendRichMessageDraft: vi.fn().mockResolvedValue(true),
     editMessageText: vi.fn().mockResolvedValue(true),
     deleteMessage: vi.fn().mockResolvedValue(true),
   };
@@ -409,6 +410,70 @@ describe("createTelegramDraftStream", () => {
     expect(api.editMessageText).toHaveBeenCalledWith(123, 17, "<i>hello again</i>", {
       parse_mode: "HTML",
     });
+  });
+
+  it("streams rendered previews with rich message drafts when enabled", async () => {
+    const api = createMockDraftApi();
+    const stream = createDraftStream(api, {
+      draftId: 77,
+      thread: { id: 42, scope: "dm" },
+      richMessagesMode: "draft",
+      renderText: (text) => ({ text: `<i>${text}</i>`, parseMode: "HTML" }),
+    });
+
+    stream.update("hello");
+    await stream.flush();
+    stream.update("hello again");
+    await stream.flush();
+
+    expect(api.sendRichMessageDraft).toHaveBeenNthCalledWith(
+      1,
+      123,
+      77,
+      { html: "<i>hello</i>" },
+      { message_thread_id: 42 },
+    );
+    expect(api.sendRichMessageDraft).toHaveBeenNthCalledWith(
+      2,
+      123,
+      77,
+      { html: "<i>hello again</i>" },
+      { message_thread_id: 42 },
+    );
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.editMessageText).not.toHaveBeenCalled();
+    expect(stream.messageId()).toBeUndefined();
+    expect(stream.hasEphemeralPreview?.()).toBe(true);
+  });
+
+  it("falls back to message previews when rich message drafts fail", async () => {
+    const api = createMockDraftApi();
+    api.sendRichMessageDraft.mockRejectedValueOnce(new Error("method not found"));
+    const warn = vi.fn();
+    const stream = createDraftStream(api, {
+      draftId: 77,
+      thread: { id: 42, scope: "dm" },
+      richMessagesMode: "auto",
+      renderText: (text) => ({ text: `<i>${text}</i>`, parseMode: "HTML" }),
+      warn,
+    });
+
+    stream.update("hello");
+    await stream.flush();
+    stream.update("hello again");
+    await stream.flush();
+
+    expect(api.sendRichMessageDraft).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage).toHaveBeenCalledWith(123, "<i>hello</i>", {
+      message_thread_id: 42,
+      parse_mode: "HTML",
+    });
+    expect(api.editMessageText).toHaveBeenCalledWith(123, 17, "<i>hello again</i>", {
+      parse_mode: "HTML",
+    });
+    expect(warn).toHaveBeenCalledWith(
+      "telegram rich stream draft failed; retrying with message preview: method not found",
+    );
   });
 
   it("keeps non-final overflow in one editable preview", async () => {
