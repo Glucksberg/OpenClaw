@@ -316,6 +316,7 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
     Requirement:
 
     - `channels.telegram.streaming` is `off | partial | block | progress` (default: `partial`)
+    - `channels.telegram.richMessages` is `off | final | draft | auto` (default: `auto`) for Telegram Bot API rich message methods; `draft` also permits eligible native DM preview drafts
     - `progress` keeps one editable status draft for tool progress, clears it at completion, and sends the final answer as a normal message
     - `streaming.preview.toolProgress` controls whether tool/progress updates reuse the same edited preview message (default: `true` when preview streaming is active)
     - `streaming.preview.commandText` controls command/exec detail inside those tool-progress lines: `raw` (default, preserves released behavior) or `status` (tool label only)
@@ -858,6 +859,7 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
   <Accordion title="Limits, retry, and CLI targets">
     - `channels.telegram.textChunkLimit` default is 4000.
     - `channels.telegram.chunkMode="newline"` prefers paragraph boundaries (blank lines) before length splitting.
+    - `channels.telegram.richMessages` controls Bot API rich message helpers: `auto` prefers rich messages when Telegram supports them, `final` limits them to final replies, `draft` also enables eligible native DM preview drafts, and `off` keeps legacy text methods.
     - `channels.telegram.mediaMaxMb` (default 100) caps inbound and outbound Telegram media size.
     - `channels.telegram.mediaGroupFlushMs` (default 500) controls how long Telegram albums/media groups are buffered before OpenClaw dispatches them as one inbound message. Increase it if album parts arrive late; decrease it to reduce album reply latency.
     - `channels.telegram.timeoutSeconds` overrides Telegram API client timeout (if unset, grammY default applies). Bot clients clamp configured values below the 60-second outbound text/typing request guard so grammY does not abort visible reply delivery before OpenClaw's transport guard and fallback can run. Long polling still uses a 45-second `getUpdates` request guard so idle polls are not abandoned indefinitely.

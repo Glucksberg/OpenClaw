@@ -46,6 +46,10 @@ export const telegramChannelConfigUiHints = {
     label: "Telegram Native Skill Commands",
     help: 'Override native skill commands for Telegram (bool or "auto").',
   },
+  richMessages: {
+    label: "Telegram Rich Messages",
+    help: 'Telegram Bot API rich message delivery mode: "auto" uses rich messages when available, "final" only for final replies, "draft" for final replies and eligible native draft previews, and "off" keeps legacy text delivery.',
+  },
   streaming: {
     label: "Telegram Streaming Mode",
     help: 'Unified Telegram stream preview mode: "off" | "partial" | "block" | "progress" (default: "partial"). "progress" keeps a single editable progress draft until final delivery. Legacy boolean/streamMode keys are detected; run doctor --fix to migrate.',
