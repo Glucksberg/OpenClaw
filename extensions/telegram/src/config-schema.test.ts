@@ -80,6 +80,25 @@ describe("telegram custom commands schema", () => {
     }
   });
 
+  it("accepts richMessages modes on channel and account config", () => {
+    for (const mode of ["off", "final", "draft", "auto"] as const) {
+      expectTelegramConfigValid({
+        richMessages: mode,
+        accounts: {
+          ops: { richMessages: mode },
+        },
+      });
+    }
+  });
+
+  it("rejects invalid richMessages modes", () => {
+    expectTelegramConfigIssue({ richMessages: "yes" }, "richMessages");
+    expectTelegramConfigIssue(
+      { accounts: { ops: { richMessages: "yes" } } },
+      "accounts.ops.richMessages",
+    );
+  });
+
   it("rejects mediaGroupFlushMs outside the supported flush bounds", () => {
     expectTelegramConfigIssue({ mediaGroupFlushMs: 9 }, "mediaGroupFlushMs");
     expectTelegramConfigIssue({ mediaGroupFlushMs: 60_001 }, "mediaGroupFlushMs");

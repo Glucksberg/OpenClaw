@@ -65,6 +65,7 @@ export type TelegramNetworkConfig = {
 };
 
 export type TelegramInlineButtonsScope = "off" | "dm" | "group" | "all" | "allowlist";
+export type TelegramRichMessagesMode = "off" | "final" | "draft" | "auto";
 export type TelegramStreamingMode = "off" | "partial" | "block" | "progress";
 export type TelegramExecApprovalTarget = "dm" | "channel" | "both";
 
@@ -111,6 +112,8 @@ export type TelegramAccountConfig = {
   name?: string;
   /** Optional provider capability tags used for agent/runtime guidance. */
   capabilities?: TelegramCapabilitiesConfig;
+  /** Telegram rich message capability mode. Default: auto. */
+  richMessages?: TelegramRichMessagesMode;
   /** Telegram-native exec approval delivery + approver authorization. */
   execApprovals?: TelegramExecApprovalConfig;
   /** Markdown formatting overrides (tables). */

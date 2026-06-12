@@ -1,4 +1,5 @@
 // Telegram tests cover helpers plugin behavior.
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildTelegramInboundOriginTarget,
@@ -15,6 +16,7 @@ import {
   resolveTelegramBotHasTopicsEnabled,
   resolveTelegramForumFlag,
   resolveTelegramForumThreadId,
+  resolveTelegramRichMessagesMode,
   resetTelegramForumFlagCacheForTest,
   shouldUseTelegramDmThreadSession,
 } from "./helpers.js";
@@ -227,6 +229,42 @@ describe("resolveTelegramBotHasTopicsEnabled", () => {
     expect(resolveTelegramBotHasTopicsEnabled({ has_topics_enabled: false })).toBe(false);
     expect(resolveTelegramBotHasTopicsEnabled({ has_topics_enabled: "true" })).toBe(false);
     expect(resolveTelegramBotHasTopicsEnabled(null)).toBe(false);
+  });
+});
+
+describe("resolveTelegramRichMessagesMode", () => {
+  it("defaults to auto when unset", () => {
+    expect(resolveTelegramRichMessagesMode({})).toBe("auto");
+    expect(resolveTelegramRichMessagesMode({ cfg: {} as OpenClawConfig })).toBe("auto");
+  });
+
+  it("uses channel-level rich message mode", () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          richMessages: "final",
+        },
+      },
+    } as OpenClawConfig;
+
+    expect(resolveTelegramRichMessagesMode({ cfg })).toBe("final");
+  });
+
+  it("prefers account-level rich message mode", () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          richMessages: "final",
+          accounts: {
+            Ops: {
+              richMessages: "draft",
+            },
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    expect(resolveTelegramRichMessagesMode({ cfg, accountId: "ops" })).toBe("draft");
   });
 });
 

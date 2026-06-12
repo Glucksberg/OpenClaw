@@ -12,6 +12,7 @@ import type {
   TelegramGroupConfig,
   TelegramTopicConfig,
 } from "openclaw/plugin-sdk/config-contracts";
+import type { TelegramRichMessagesMode } from "openclaw/plugin-sdk/config-types";
 import { readChannelAllowFromStore } from "openclaw/plugin-sdk/conversation-runtime";
 import {
   asDateTimestampMs,
@@ -20,6 +21,7 @@ import {
 import { normalizeAccountId } from "openclaw/plugin-sdk/routing";
 import { normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { expandTelegramAllowFromWithAccessGroups } from "../access-groups.js";
+import { resolveTelegramAccountConfig } from "../account-config.js";
 import {
   firstDefined,
   isSenderAllowed,
@@ -59,6 +61,7 @@ export {
 };
 
 const TELEGRAM_GENERAL_TOPIC_ID = 1;
+const DEFAULT_TELEGRAM_RICH_MESSAGES_MODE: TelegramRichMessagesMode = "auto";
 const TELEGRAM_FORUM_FLAG_CACHE_MAX_CHATS = 1024;
 const TELEGRAM_FORUM_FLAG_CACHE_TTL_MS = 10 * 60_000;
 const telegramForumFlagByChatId = new Map<string, { expiresAtMs: number; isForum: boolean }>();
@@ -114,6 +117,18 @@ export function resolveTelegramBotHasTopicsEnabled(me: unknown): boolean {
     "has_topics_enabled" in me &&
     me.has_topics_enabled === true
   );
+}
+
+export function resolveTelegramRichMessagesMode(params: {
+  cfg?: OpenClawConfig;
+  accountId?: string | null;
+}): TelegramRichMessagesMode {
+  const telegram = params.cfg?.channels?.telegram;
+  const account =
+    params.cfg && params.accountId
+      ? resolveTelegramAccountConfig(params.cfg, normalizeAccountId(params.accountId))
+      : undefined;
+  return account?.richMessages ?? telegram?.richMessages ?? DEFAULT_TELEGRAM_RICH_MESSAGES_MODE;
 }
 
 export function extractTelegramForumFlag(value: unknown): boolean | undefined {

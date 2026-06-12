@@ -64,6 +64,7 @@ const DiscordIdListSchema = z.array(DiscordIdSchema);
 const DiscordSnowflakeStringSchema = z.string().regex(/^\d+$/, "Discord user ID must be numeric");
 
 const TelegramInlineButtonsScopeSchema = z.enum(["off", "dm", "group", "all", "allowlist"]);
+const TelegramRichMessagesModeSchema = z.enum(["off", "final", "draft", "auto"]);
 const TelegramIdListSchema = z.array(z.union([z.string(), z.number()]));
 
 const TelegramCapabilitiesSchema = z.union([
@@ -252,6 +253,7 @@ export const TelegramAccountSchemaBase = z
   .object({
     name: z.string().optional(),
     capabilities: TelegramCapabilitiesSchema.optional(),
+    richMessages: TelegramRichMessagesModeSchema.optional(),
     execApprovals: z
       .object({
         enabled: NativeExecApprovalEnableModeSchema.optional(),
