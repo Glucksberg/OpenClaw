@@ -95,6 +95,7 @@ import {
   buildTypingThreadParams,
   getTelegramTextParts,
   resolveTelegramReplyId,
+  resolveTelegramRichMessagesMode,
   type TelegramThreadSpec,
 } from "./bot/helpers.js";
 import {
@@ -1466,6 +1467,7 @@ export const dispatchTelegramMessage = async ({
     tableMode,
     chunkMode,
     linkPreview: telegramCfg.linkPreview,
+    richMessagesMode: resolveTelegramRichMessagesMode({ cfg, accountId: route.accountId }),
     replyQuoteMessageId,
     replyQuoteText,
     replyQuotePosition,

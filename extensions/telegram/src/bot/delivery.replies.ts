@@ -4,8 +4,11 @@ import {
   createOutboundPayloadPlan,
   projectOutboundPayloadPlanForDelivery,
 } from "openclaw/plugin-sdk/channel-outbound";
-import type { ReplyToMode } from "openclaw/plugin-sdk/config-contracts";
-import type { MarkdownTableMode } from "openclaw/plugin-sdk/config-contracts";
+import type {
+  MarkdownTableMode,
+  ReplyToMode,
+  TelegramRichMessagesMode,
+} from "openclaw/plugin-sdk/config-contracts";
 import { fireAndForgetHook } from "openclaw/plugin-sdk/hook-runtime";
 import { createInternalHookEvent, triggerInternalHook } from "openclaw/plugin-sdk/hook-runtime";
 import {
@@ -172,6 +175,7 @@ async function deliverTextReply(params: {
   replyQuoteEntities?: unknown[];
   linkPreview?: boolean;
   silent?: boolean;
+  richMessagesMode?: TelegramRichMessagesMode;
   replyToId?: number;
   replyToMode: ReplyToMode;
   progress: DeliveryProgress;
@@ -204,6 +208,7 @@ async function deliverTextReply(params: {
           linkPreview: params.linkPreview,
           silent: params.silent,
           replyMarkup,
+          richMessagesMode: params.richMessagesMode,
         },
       );
       if (firstDeliveredMessageId == null) {
@@ -224,6 +229,7 @@ async function sendPendingFollowUpText(params: {
   replyMarkup?: ReturnType<typeof buildInlineKeyboard>;
   linkPreview?: boolean;
   silent?: boolean;
+  richMessagesMode?: TelegramRichMessagesMode;
   replyToId?: number;
   replyToMode: ReplyToMode;
   progress: DeliveryProgress;
@@ -245,6 +251,7 @@ async function sendPendingFollowUpText(params: {
         linkPreview: params.linkPreview,
         silent: params.silent,
         replyMarkup,
+        richMessagesMode: params.richMessagesMode,
       });
     },
   });
@@ -287,6 +294,7 @@ async function sendTelegramVoiceFallbackText(opts: {
   thread?: TelegramThreadSpec | null;
   linkPreview?: boolean;
   silent?: boolean;
+  richMessagesMode?: TelegramRichMessagesMode;
   replyMarkup?: ReturnType<typeof buildInlineKeyboard>;
   replyQuoteText?: string;
 }): Promise<number | undefined> {
@@ -309,6 +317,7 @@ async function sendTelegramVoiceFallbackText(opts: {
       linkPreview: opts.linkPreview,
       silent: opts.silent,
       replyMarkup: !appliedReplyTo ? opts.replyMarkup : undefined,
+      richMessagesMode: opts.richMessagesMode,
     });
     if (firstDeliveredMessageId == null) {
       firstDeliveredMessageId = messageId;
@@ -335,6 +344,7 @@ async function deliverMediaReply(params: {
   onVoiceRecording?: () => Promise<void> | void;
   linkPreview?: boolean;
   silent?: boolean;
+  richMessagesMode?: TelegramRichMessagesMode;
   replyQuoteMessageId?: number;
   replyQuoteText?: string;
   replyQuotePosition?: number;
@@ -491,6 +501,7 @@ async function deliverMediaReply(params: {
               thread: params.thread,
               linkPreview: params.linkPreview,
               silent: params.silent,
+              richMessagesMode: params.richMessagesMode,
               replyMarkup: params.replyMarkup,
               replyQuoteText: params.replyQuoteText,
             });
@@ -522,6 +533,7 @@ async function deliverMediaReply(params: {
                 thread: params.thread,
                 linkPreview: params.linkPreview,
                 silent: params.silent,
+                richMessagesMode: params.richMessagesMode,
                 replyMarkup: params.replyMarkup,
               });
               visibleFallbackText = fallbackText;
@@ -571,6 +583,7 @@ async function deliverMediaReply(params: {
         replyMarkup: params.replyMarkup,
         linkPreview: params.linkPreview,
         silent: params.silent,
+        richMessagesMode: params.richMessagesMode,
         replyToId: params.replyToId,
         replyToMode: params.replyToMode,
         progress: params.progress,
@@ -707,6 +720,8 @@ export async function deliverReplies(params: {
   linkPreview?: boolean;
   /** When true, messages are sent with disable_notification. */
   silent?: boolean;
+  /** Telegram rich message mode for final text replies. */
+  richMessagesMode?: TelegramRichMessagesMode;
   /** Message id that the optional quote text belongs to. */
   replyQuoteMessageId?: number;
   /** Optional quote text for Telegram reply_parameters. */
@@ -856,6 +871,7 @@ export async function deliverReplies(params: {
           replyQuoteEntities: replyQuote.entities,
           linkPreview: params.linkPreview,
           silent: params.silent,
+          richMessagesMode: params.richMessagesMode,
           replyToId,
           replyToMode: params.replyToMode,
           progress,
@@ -881,6 +897,7 @@ export async function deliverReplies(params: {
           replyQuotePosition: replyQuote.position,
           replyQuoteEntities: replyQuote.entities,
           replyMarkup,
+          richMessagesMode: params.richMessagesMode,
           replyToId,
           replyToMode: params.replyToMode,
           progress,
