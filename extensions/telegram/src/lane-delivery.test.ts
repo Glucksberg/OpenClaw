@@ -228,10 +228,7 @@ describe("createLaneTextDeliverer", () => {
     expect(answer.update).toHaveBeenCalledWith(previousBlock);
     expect(answer.update).not.toHaveBeenCalledWith(nextAssistantBlock);
     expect(harness.clearDraftLane).toHaveBeenCalledTimes(1);
-    expect(harness.sendPayload).toHaveBeenCalledWith(
-      { text: previousBlock },
-      { durable: false },
-    );
+    expect(harness.sendPayload).toHaveBeenCalledWith({ text: previousBlock }, { durable: false });
     expect(harness.sendPayload).not.toHaveBeenCalledWith(
       { text: nextAssistantBlock },
       expect.anything(),
@@ -279,6 +276,27 @@ describe("createLaneTextDeliverer", () => {
     expect(harness.markDelivered).not.toHaveBeenCalled();
     expect(harness.lanes.answer.lastPartialText).toBe("");
     expect(harness.lanes.answer.hasStreamedMessage).toBe(false);
+    expect(harness.lanes.answer.finalized).toBe(false);
+  });
+
+  it("keeps ephemeral rich draft previews out of persistent delivery", async () => {
+    const answer = createTestDraftStream({ ephemeralPreview: true });
+    const harness = createHarness({ answerStream: answer });
+
+    const result = await harness.deliverLaneText({
+      laneName: "answer",
+      text: "short",
+      payload: { text: "short" },
+      infoKind: "block",
+    });
+
+    expect(result.kind).toBe("preview-updated");
+    expect(answer.update).toHaveBeenCalledWith("short");
+    expect(harness.flushDraftLane).toHaveBeenCalledTimes(1);
+    expect(answer.discard).not.toHaveBeenCalled();
+    expect(harness.sendPayload).not.toHaveBeenCalled();
+    expect(harness.markDelivered).toHaveBeenCalledTimes(1);
+    expect(harness.lanes.answer.hasStreamedMessage).toBe(true);
     expect(harness.lanes.answer.finalized).toBe(false);
   });
 

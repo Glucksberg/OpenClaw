@@ -31,6 +31,8 @@ export type TelegramDraftStream = {
   forceNewMessage: () => void;
   /** True when a preview sendMessage was attempted but the response was lost. */
   sendMayHaveLanded?: () => boolean;
+  /** True when the latest preview was delivered through Telegram's ephemeral draft UI. */
+  hasEphemeralPreview?: () => boolean;
 };
 
 type TelegramDraftPreview = {
@@ -138,6 +140,7 @@ export function createTelegramDraftStream(params: {
   let generation = 0;
   let deliveredTextOffset = 0;
   let richDraftDisabled = false;
+  let ephemeralPreviewDelivered = false;
   type PreviewSendParams = {
     renderedText: string;
     renderedParseMode: "HTML" | undefined;
@@ -161,6 +164,7 @@ export function createTelegramDraftStream(params: {
     sendGeneration,
   }: PreviewSendParams): Promise<boolean> => {
     if (typeof streamMessageId === "number") {
+      ephemeralPreviewDelivered = false;
       streamVisibleSinceMs ??= Date.now();
       if (renderedParseMode) {
         await params.api.editMessageText(chatId, streamMessageId, renderedText, {
@@ -192,6 +196,7 @@ export function createTelegramDraftStream(params: {
     }
     const normalizedMessageId = Math.trunc(sentMessageId);
     const visibleSinceMs = Date.now();
+    ephemeralPreviewDelivered = false;
     if (sendGeneration !== generation) {
       params.onSupersededPreview?.({
         messageId: normalizedMessageId,
@@ -235,6 +240,7 @@ export function createTelegramDraftStream(params: {
       return true;
     }
     streamVisibleSinceMs ??= Date.now();
+    ephemeralPreviewDelivered = true;
     return true;
   };
   const stopOversizedPreview = (renderedText: string): false => {
@@ -389,6 +395,7 @@ export function createTelegramDraftStream(params: {
     lastSentText = "";
     lastSentParseMode = undefined;
     richDraftDisabled = false;
+    ephemeralPreviewDelivered = false;
     if (options?.resetOffset !== false) {
       deliveredTextOffset = 0;
       lastRequestedText = "";
@@ -445,5 +452,6 @@ export function createTelegramDraftStream(params: {
     materialize,
     forceNewMessage,
     sendMayHaveLanded: () => messageSendAttempted && typeof streamMessageId !== "number",
+    hasEphemeralPreview: () => ephemeralPreviewDelivered && typeof streamMessageId !== "number",
   };
 }

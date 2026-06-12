@@ -14,6 +14,7 @@ type TestDraftStream = {
   materialize: ReturnType<typeof vi.fn<() => Promise<number | undefined>>>;
   forceNewMessage: ReturnType<typeof vi.fn<() => void>>;
   sendMayHaveLanded: ReturnType<typeof vi.fn<() => boolean>>;
+  hasEphemeralPreview: ReturnType<typeof vi.fn<() => boolean>>;
   setMessageId: (value: number | undefined) => void;
 };
 
@@ -25,6 +26,7 @@ export function createTestDraftStream(params?: {
   clearMessageIdOnForceNew?: boolean;
   stopUpdatesOnDiscard?: boolean;
   visibleSinceMs?: number;
+  ephemeralPreview?: boolean;
 }): TestDraftStream {
   let messageId = params?.messageId;
   let visibleSinceMs = params?.visibleSinceMs;
@@ -64,6 +66,7 @@ export function createTestDraftStream(params?: {
       visibleSinceMs = undefined;
     }),
     sendMayHaveLanded: vi.fn().mockReturnValue(false),
+    hasEphemeralPreview: vi.fn().mockReturnValue(params?.ephemeralPreview === true),
     setMessageId: (value: number | undefined) => {
       messageId = value;
       visibleSinceMs = value == null ? undefined : Date.now();
@@ -100,6 +103,7 @@ export function createSequencedTestDraftStream(startMessageId = 1001): TestDraft
       visibleSinceMs = undefined;
     }),
     sendMayHaveLanded: vi.fn().mockReturnValue(false),
+    hasEphemeralPreview: vi.fn().mockReturnValue(false),
     setMessageId: (value: number | undefined) => {
       activeMessageId = value;
       visibleSinceMs = value == null ? undefined : Date.now();

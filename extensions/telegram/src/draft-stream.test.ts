@@ -443,6 +443,7 @@ describe("createTelegramDraftStream", () => {
     expect(api.sendMessage).not.toHaveBeenCalled();
     expect(api.editMessageText).not.toHaveBeenCalled();
     expect(stream.messageId()).toBeUndefined();
+    expect(stream.hasEphemeralPreview?.()).toBe(true);
   });
 
   it("falls back to message previews when rich message drafts fail", async () => {
