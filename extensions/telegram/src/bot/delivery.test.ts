@@ -801,6 +801,71 @@ describe("deliverReplies", () => {
     });
   });
 
+  it("sends final text replies as rich messages when enabled", async () => {
+    const runtime = createRuntime();
+    const sendMessage = vi.fn();
+    const sendRichMessage = vi.fn().mockResolvedValue({
+      message_id: 33,
+      chat: { id: "123" },
+    });
+    const bot = createBot({ sendMessage, sendRichMessage });
+
+    await deliverWith({
+      replies: [{ text: "hi **boss**" }],
+      runtime,
+      bot,
+      linkPreview: false,
+      richMessagesMode: "final",
+    });
+
+    expect(sendRichMessage).toHaveBeenCalledWith(
+      "123",
+      { html: "hi <b>boss</b>" },
+      { link_preview_options: { is_disabled: true } },
+    );
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps final text replies on sendMessage when rich messages are off", async () => {
+    const runtime = createRuntime();
+    const sendMessage = vi.fn().mockResolvedValue({
+      message_id: 34,
+      chat: { id: "123" },
+    });
+    const sendRichMessage = vi.fn();
+    const bot = createBot({ sendMessage, sendRichMessage });
+
+    await deliverWith({
+      replies: [{ text: "hi **boss**" }],
+      runtime,
+      bot,
+      richMessagesMode: "off",
+    });
+
+    expect(sendRichMessage).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith("123", "hi <b>boss</b>", { parse_mode: "HTML" });
+  });
+
+  it("falls back to sendMessage when rich message sends fail", async () => {
+    const runtime = createRuntime();
+    const sendRichMessage = vi.fn().mockRejectedValueOnce(new Error("method not found"));
+    const sendMessage = vi.fn().mockResolvedValue({
+      message_id: 35,
+      chat: { id: "123" },
+    });
+    const bot = createBot({ sendRichMessage, sendMessage });
+
+    await deliverWith({
+      replies: [{ text: "hi **boss**" }],
+      runtime,
+      bot,
+      richMessagesMode: "auto",
+    });
+
+    expect(sendRichMessage).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith("123", "hi <b>boss</b>", { parse_mode: "HTML" });
+  });
+
   it("includes message_thread_id for DM topics", async () => {
     const { runtime, sendMessage, bot } = createSendMessageHarness();
 

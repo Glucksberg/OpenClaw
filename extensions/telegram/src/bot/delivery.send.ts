@@ -1,5 +1,6 @@
 // Telegram plugin module implements delivery.send behavior.
 import { type Bot, GrammyError } from "grammy";
+import type { TelegramRichMessagesMode } from "openclaw/plugin-sdk/config-contracts";
 import { createTelegramRetryRunner } from "openclaw/plugin-sdk/retry-runtime";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { formatErrorMessage } from "openclaw/plugin-sdk/ssrf-runtime";
@@ -11,6 +12,7 @@ import {
   getTelegramNativeQuoteReplyMessageId,
   removeTelegramNativeQuoteParam,
 } from "../reply-parameters.js";
+import { sendTelegramRichMessage } from "../rich-message.js";
 import { buildInlineKeyboard } from "../send.js";
 import type { TelegramThreadSpec } from "./helpers.js";
 
@@ -21,6 +23,10 @@ const EMPTY_TEXT_ERR_RE = /message text is empty/i;
 const QUOTE_PARAM_RE = /\bquote not found\b|\bQUOTE_TEXT_INVALID\b|\bquote text invalid\b/i;
 const GrammyErrorCtor: typeof GrammyError | undefined =
   typeof GrammyError === "function" ? GrammyError : undefined;
+
+function shouldUseTelegramRichFinal(mode?: TelegramRichMessagesMode): boolean {
+  return mode === "auto" || mode === "final";
+}
 
 function isTelegramQuoteParamError(err: unknown): boolean {
   if (GrammyErrorCtor && err instanceof GrammyErrorCtor) {
@@ -97,6 +103,7 @@ export async function sendTelegramText(
     linkPreview?: boolean;
     silent?: boolean;
     replyMarkup?: ReturnType<typeof buildInlineKeyboard>;
+    richMessagesMode?: TelegramRichMessagesMode;
   },
 ): Promise<number> {
   const baseParams = buildTelegramSendParams({
@@ -138,6 +145,40 @@ export async function sendTelegramText(
       throw new Error("telegram sendMessage failed: empty formatted text and empty plain fallback");
     }
     return await sendPlainFallback();
+  }
+  if (shouldUseTelegramRichFinal(opts?.richMessagesMode)) {
+    try {
+      const res = await sendTelegramWithThreadFallback({
+        operation: "sendRichMessage",
+        runtime,
+        thread: opts?.thread,
+        requestParams: baseParams,
+        send: (effectiveParams) =>
+          sendTelegramRichMessage({
+            api: bot.api,
+            chatId,
+            richMessage: { html: htmlText },
+            methodParams: {
+              ...(linkPreviewOptions ? { link_preview_options: linkPreviewOptions } : {}),
+              ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+              ...effectiveParams,
+            },
+          }),
+      });
+      const messageId =
+        typeof res === "object" && res && "message_id" in res
+          ? Number((res as { message_id?: unknown }).message_id)
+          : Number.NaN;
+      if (!Number.isFinite(messageId)) {
+        throw new Error("telegram sendRichMessage returned no message_id");
+      }
+      runtime.log?.(`telegram sendRichMessage ok chat=${chatId} message=${messageId}`);
+      return Math.trunc(messageId);
+    } catch (err) {
+      runtime.log?.(
+        `telegram rich message send failed; retrying via sendMessage: ${formatErrorMessage(err)}`,
+      );
+    }
   }
   try {
     const res = await sendTelegramWithThreadFallback({
