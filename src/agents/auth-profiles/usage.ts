@@ -1331,7 +1331,7 @@ export async function clearAuthProfileCooldown(params: {
   store: AuthProfileStore;
   profileId: string;
   agentDir?: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const { store, profileId, agentDir } = params;
   // Persistence uses the fresh target-local store loaded by the locked updater.
   // `store` only receives the committed usage snapshot for the caller's runtime view.
@@ -1347,10 +1347,12 @@ export async function clearAuthProfileCooldown(params: {
     },
   });
   if (updated) {
-    return;
+    store.usageStats = updated.usageStats;
+    return true;
   }
   if (updated === null) {
     logDroppedAuthProfileBookkeeping("clear_cooldown", profileId);
   }
+  return false;
 }
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */
