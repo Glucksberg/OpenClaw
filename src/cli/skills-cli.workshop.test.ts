@@ -189,6 +189,30 @@ describe("skills workshop cli", () => {
     expect(mocks.runtimeStdout.at(-1)).toContain("--- references/weather.md ---");
     expect(mocks.runtimeStdout.at(-1)).toContain("Use current conditions before recommendations.");
 
+    await runCommand(["skills", "workshop", "review", proposalId!, "--json"]);
+    const review = JSON.parse(mocks.runtimeStdout.at(-1) ?? "{}") as {
+      content: string;
+      mode: string;
+      revisionHash: string;
+      record: { proposedVersion: string };
+      supportFiles: Array<{ path: string; content: string }>;
+    };
+    expect(review).toMatchObject({
+      mode: "full",
+      supportFiles: [
+        {
+          path: "references/weather.md",
+          content: "Use current conditions before recommendations.\n",
+        },
+      ],
+    });
+    expect(review.content).toContain('name: "paris-weather"');
+    expect(review.content).toContain("Check current weather before advice.");
+    expect(review.content).not.toContain("status: proposal");
+
+    await runCommand(["skills", "workshop", "review", proposalId!]);
+    expect(mocks.runtimeStdout.at(-1)).toContain(`Proposal: ${proposalId}\nVersion: v1`);
+
     const revisedPath = path.join(mocks.workspaceDir, "revised-proposal.md");
     await fs.writeFile(
       revisedPath,
@@ -207,7 +231,28 @@ describe("skills workshop cli", () => {
     ]);
     expect(mocks.runtimeStdout.at(-1)).toContain(`Revised ${proposalId} v2`);
 
-    await runCommand(["skills", "workshop", "apply", proposalId!]);
+    await expect(
+      runCommand([
+        "skills",
+        "workshop",
+        "apply",
+        proposalId!,
+        "--expected-revision-hash",
+        review.revisionHash,
+      ]),
+    ).rejects.toThrow("__exit__:1");
+    expect(mocks.runtimeErrors.at(-1)).toContain("Skill proposal revision changed");
+
+    await runCommand(["skills", "workshop", "inspect", proposalId!, "--json"]);
+    const revised = JSON.parse(mocks.runtimeStdout.at(-1) ?? "{}") as { revisionHash: string };
+    await runCommand([
+      "skills",
+      "workshop",
+      "apply",
+      proposalId!,
+      "--expected-revision-hash",
+      revised.revisionHash,
+    ]);
     expect(mocks.runtimeStdout.at(-1)).toContain("Applied");
     await expect(
       fs.readFile(path.join(mocks.workspaceDir, "skills", "paris-weather", "SKILL.md"), "utf8"),
