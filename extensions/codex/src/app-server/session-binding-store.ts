@@ -31,6 +31,10 @@ export function createLazyCodexAppServerBindingStore(
     adoptSessionGeneration: async (identity, previousSessionId) =>
       (await store()).adoptSessionGeneration(identity, previousSessionId),
     resetSessionGeneration: async (identity) => (await store()).resetSessionGeneration(identity),
+    recordSessionGenerationReset: async (identity, resetToken) =>
+      (await store()).recordSessionGenerationReset(identity, resetToken),
+    consumeSessionGenerationReset: async (identity, resetToken) =>
+      (await store()).consumeSessionGenerationReset(identity, resetToken),
     retireSessionGeneration: async (identity) => (await store()).retireSessionGeneration(identity),
     withThreadArchiveFence: async (run) => (await store()).withThreadArchiveFence(run),
     withLease: async (identity, run) => (await store()).withLease(identity, run),

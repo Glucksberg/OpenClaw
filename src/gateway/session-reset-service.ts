@@ -170,6 +170,7 @@ export function emitGatewaySessionEndPluginHook(params: {
   archivedTranscripts?: ArchivedSessionTranscript[];
   nextSessionId?: string;
   nextSessionKey?: string;
+  resetToken?: string;
 }): void {
   if (!params.sessionId) {
     return;
@@ -222,6 +223,7 @@ export function emitGatewaySessionEndPluginHook(params: {
     transcriptArchived: transcript.transcriptArchived,
     nextSessionId: params.nextSessionId,
     nextSessionKey: params.nextSessionKey,
+    resetToken: params.resetToken,
   });
   void runWithGatewayIndependentRootWorkContinuation(async () => {
     await hookRunner.runSessionEnd(payload.event, payload.context);
@@ -1219,6 +1221,7 @@ export async function performGatewaySessionReset(params: {
         };
       }
       const hadExistingEntry = Boolean(entry);
+      const resetToken = entry?.sessionId ? randomUUID() : undefined;
       const resetLifecycleRevision = entry?.lifecycleRevision;
       const agentId = normalizeAgentId(target.agentId ?? resolveDefaultAgentId(cfg));
       const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
@@ -1299,6 +1302,7 @@ export async function performGatewaySessionReset(params: {
           sessionKey: target.canonicalKey ?? params.key,
           sessionFile: target.canonicalKey ?? params.key,
           reason: "reset",
+          resetToken,
         });
       }
       const beforeResetMessages = getGlobalHookRunner()?.hasHooks("before_reset")
@@ -1363,6 +1367,7 @@ export async function performGatewaySessionReset(params: {
           agentId: target.agentId,
           reason: params.reason,
           archivedTranscripts: [],
+          resetToken,
         });
         await emitSessionUnboundLifecycleEvent({
           targetSessionKey: target.canonicalKey,
@@ -1644,6 +1649,7 @@ export async function performGatewaySessionReset(params: {
           reason: params.reason,
           archivedTranscripts,
           nextSessionId: next.sessionId,
+          resetToken,
         });
         emitGatewaySessionStartPluginHook({
           cfg,

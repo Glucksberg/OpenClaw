@@ -283,6 +283,24 @@ describe("Codex agent harness supports()", () => {
 });
 
 describe("Codex agent harness reset()", () => {
+  it("is idempotent before the retained session has a binding", async () => {
+    const harness = createCodexAppServerAgentHarness({
+      bindingStore: createCodexTestBindingStore(),
+    });
+    if (!harness.reset) {
+      throw new Error("expected Codex harness reset hook");
+    }
+
+    await expect(
+      harness.reset({
+        agentId: "worker",
+        sessionId: "session-1",
+        sessionKey: "agent:worker:main",
+        reason: "reset",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it("clears an in-place session generation without stranding its replacement", async () => {
     const bindingStore = createCodexTestBindingStore();
     const identity = sessionBindingIdentity({
@@ -304,9 +322,19 @@ describe("Codex agent harness reset()", () => {
       sessionId: "session-1",
       sessionKey: "agent:worker:main",
       reason: "reset",
+      resetToken: "reset-session-1",
     });
 
     await expect(bindingStore.read(identity)).resolves.toBeUndefined();
+    await expect(bindingStore.consumeSessionGenerationReset(identity, "wrong-reset")).resolves.toBe(
+      false,
+    );
+    await expect(
+      bindingStore.consumeSessionGenerationReset(identity, "reset-session-1"),
+    ).resolves.toBe(true);
+    await expect(
+      bindingStore.consumeSessionGenerationReset(identity, "reset-session-1"),
+    ).resolves.toBe(false);
     await expect(
       bindingStore.mutate(identity, {
         kind: "set",

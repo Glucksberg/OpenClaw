@@ -314,30 +314,36 @@ export default definePluginEntry({
       // key; that child owns its own Codex thread binding (a Codex fork is a new
       // thread, not a transfer of the parent's). Retiring the parent's still-live
       // binding here would strand it, so skip when the successor provably lives
-      // under a different session key. The only cross-key emitter (gateway child
-      // creation) keeps the parent row live; same-key rollovers omit or repeat
-      // the key and still retire, as do unknown-current-key ends (no provable
-      // handoff) and later idle/daily/deleted ends. See #106778.
+      // under a different session key. Durable reset can also retain the same
+      // physical id, but equality alone is not proof that harness cleanup ran:
+      // consume the exact successful reset token before suppressing its delayed
+      // end. A missing or mismatched token remains fail-closed.
+      // Unknown-current-key ends and true physical rollovers still retire. See
+      // #106778.
       const endedSessionKey = sessionKey?.trim();
       const nextSessionKey = event.nextSessionKey?.trim();
+      const config = resolveCurrentConfig();
+      const { sessionBindingIdentity } = await import("./src/app-server/session-binding.js");
+      const identity = sessionBindingIdentity({
+        sessionId: event.sessionId,
+        ...(sessionKey ? { sessionKey } : {}),
+        ...(ctx.agentId ? { agentId: ctx.agentId } : {}),
+        ...(config ? { config } : {}),
+      });
+      const endedSessionId = event.sessionId.trim();
+      const nextSessionId = event.nextSessionId?.trim();
+      const resetToken = event.resetToken?.trim();
+      const matchedReset =
+        (event.reason === "new" || event.reason === "reset") &&
+        resetToken &&
+        (await bindingStore.consumeSessionGenerationReset(identity, resetToken));
       if (endedSessionKey && nextSessionKey && nextSessionKey !== endedSessionKey) {
         return;
       }
-      // Reset hooks already clear in-place lifecycle state before the next turn.
-      // A delayed session_end must not retire a replacement that reuses the id.
-      if (event.nextSessionId?.trim() === event.sessionId.trim()) {
+      if (endedSessionId && nextSessionId === endedSessionId && matchedReset) {
         return;
       }
-      const config = resolveCurrentConfig();
-      const { sessionBindingIdentity } = await import("./src/app-server/session-binding.js");
-      await bindingStore.retireSessionGeneration(
-        sessionBindingIdentity({
-          sessionId: event.sessionId,
-          ...(sessionKey ? { sessionKey } : {}),
-          ...(ctx.agentId ? { agentId: ctx.agentId } : {}),
-          ...(config ? { config } : {}),
-        }),
-      );
+      await bindingStore.retireSessionGeneration(identity);
     });
   },
 });
