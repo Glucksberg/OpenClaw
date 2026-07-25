@@ -680,6 +680,7 @@ export function setupRunAttemptTestHooks(): void {
     resetCodexAppServerClientFactoryForTest();
     clearRuntimeAuthProfileStoreSnapshots();
     dynamicToolBuildState.openClawCodingToolsFactory = undefined;
+    dynamicToolBuildState.runtimeToolNormalizer = undefined;
     codexWorkspaceDirCache.clear();
     nativeHookRelayUnregisterQueue.clear();
     nativeHookRelayTesting.clearNativeHookRelaysForTests();
