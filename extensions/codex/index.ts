@@ -47,10 +47,7 @@ import {
 import { createCodexWebSearchProvider } from "./src/web-search-provider.js";
 
 const RESET_SESSION_REASONS: ReadonlySet<string> = new Set(["new", "reset", "idle", "daily"]);
-const ENDED_SESSION_REASONS: ReadonlySet<string> = new Set([
-  ...RESET_SESSION_REASONS,
-  "deleted",
-]);
+const ENDED_SESSION_REASONS: ReadonlySet<string> = new Set([...RESET_SESSION_REASONS, "deleted"]);
 
 export default definePluginEntry({
   id: "codex",
