@@ -668,43 +668,48 @@ describe("codex plugin", () => {
     await expect(bindingStore.read(failedReset)).resolves.toBeUndefined();
 
     // A successful harness reset records the exact generation. Preserve the
-    // fresh binding even when its delayed same-id end arrives after rebinding.
-    const retained = sessionBindingIdentity({
-      agentId: "worker",
-      sessionId: "retained-1",
-      sessionKey: "agent:worker:retained-1",
-    });
-    await bindingStore.mutate(retained, {
-      kind: "set",
-      binding: { threadId: "thread-before-reset", cwd: "/repo" },
-    });
-    await harness.reset({
-      agentId: "worker",
-      sessionId: "retained-1",
-      sessionKey: "agent:worker:retained-1",
-      reason: "reset",
-      resetToken: "retained-reset-token",
-    });
-    await bindingStore.mutate(retained, {
-      kind: "set",
-      binding: { threadId: "thread-after-reset", cwd: "/repo" },
-    });
-    await expect(
-      bindingStore.consumeSessionGenerationReset(retained, "unrelated-reset-token"),
-    ).resolves.toBe(false);
-    await sessionEnd(
-      {
-        sessionId: "retained-1",
-        sessionKey: "agent:worker:retained-1",
-        reason: "new",
-        nextSessionId: "retained-1",
-        resetToken: "retained-reset-token",
-      },
-      { agentId: "worker", sessionId: "retained-1" },
-    );
-    await expect(bindingStore.read(retained)).resolves.toMatchObject({
-      threadId: "thread-after-reset",
-    });
+    // fresh binding even when any delayed same-id reset end arrives after rebinding.
+    for (const reason of ["new", "reset", "idle", "daily"] as const) {
+      const sessionId = `retained-${reason}`;
+      const sessionKey = `agent:worker:${sessionId}`;
+      const resetToken = `${sessionId}-reset-token`;
+      const retained = sessionBindingIdentity({
+        agentId: "worker",
+        sessionId,
+        sessionKey,
+      });
+      await bindingStore.mutate(retained, {
+        kind: "set",
+        binding: { threadId: `thread-before-${reason}`, cwd: "/repo" },
+      });
+      await harness.reset({
+        agentId: "worker",
+        sessionId,
+        sessionKey,
+        reason,
+        resetToken,
+      });
+      await bindingStore.mutate(retained, {
+        kind: "set",
+        binding: { threadId: `thread-after-${reason}`, cwd: "/repo" },
+      });
+      await expect(
+        bindingStore.consumeSessionGenerationReset(retained, "unrelated-reset-token"),
+      ).resolves.toBe(false);
+      await sessionEnd(
+        {
+          sessionId,
+          sessionKey,
+          reason,
+          nextSessionId: sessionId,
+          resetToken,
+        },
+        { agentId: "worker", sessionId },
+      );
+      await expect(bindingStore.read(retained)).resolves.toMatchObject({
+        threadId: `thread-after-${reason}`,
+      });
+    }
 
     // Repeated delivery of the same reset token remains one logical marker,
     // while a different reset token cannot steal it.

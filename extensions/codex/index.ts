@@ -46,11 +46,14 @@ import {
 } from "./src/supervision-tools.js";
 import { createCodexWebSearchProvider } from "./src/web-search-provider.js";
 
-const ENDED_SESSION_REASONS: ReadonlySet<string> = new Set([
+const RESET_SESSION_REASONS: ReadonlySet<string> = new Set([
   "new",
   "reset",
   "idle",
   "daily",
+]);
+const ENDED_SESSION_REASONS: ReadonlySet<string> = new Set([
+  ...RESET_SESSION_REASONS,
   "deleted",
 ]);
 
@@ -334,7 +337,7 @@ export default definePluginEntry({
       const nextSessionId = event.nextSessionId?.trim();
       const resetToken = event.resetToken?.trim();
       const matchedReset =
-        (event.reason === "new" || event.reason === "reset") &&
+        RESET_SESSION_REASONS.has(event.reason) &&
         resetToken &&
         (await bindingStore.consumeSessionGenerationReset(identity, resetToken));
       if (endedSessionKey && nextSessionKey && nextSessionKey !== endedSessionKey) {
