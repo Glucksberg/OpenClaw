@@ -1525,14 +1525,14 @@ describe("runCodexAppServerAttempt turn watches", () => {
       path.join(tempDir, "session-post-tool-silent.jsonl"),
       path.join(tempDir, "workspace-post-tool-silent"),
     );
-    params.timeoutMs = 100;
+    params.timeoutMs = 1_000;
 
     let settled = false;
     const run = runCodexAppServerAttempt(params, {
       turnCompletionIdleTimeoutMs: 20,
       turnAssistantCompletionIdleTimeoutMs: 20,
-      postToolRawAssistantCompletionIdleTimeoutMs: 180,
-      turnTerminalIdleTimeoutMs: 500,
+      postToolRawAssistantCompletionIdleTimeoutMs: 1_800,
+      turnTerminalIdleTimeoutMs: 5_000,
     }).finally(() => {
       settled = true;
     });
@@ -1544,7 +1544,7 @@ describe("runCodexAppServerAttempt turn watches", () => {
     expect(toolResult.success).toBe(false);
 
     await new Promise((resolve) => {
-      setTimeout(resolve, 130);
+      setTimeout(resolve, 1_300);
     });
     expect(settled).toBe(false);
     expect(harness.request.mock.calls.some(([method]) => method === "turn/interrupt")).toBe(false);
