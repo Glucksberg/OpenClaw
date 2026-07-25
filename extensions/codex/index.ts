@@ -46,12 +46,7 @@ import {
 } from "./src/supervision-tools.js";
 import { createCodexWebSearchProvider } from "./src/web-search-provider.js";
 
-const RESET_SESSION_REASONS: ReadonlySet<string> = new Set([
-  "new",
-  "reset",
-  "idle",
-  "daily",
-]);
+const RESET_SESSION_REASONS: ReadonlySet<string> = new Set(["new", "reset", "idle", "daily"]);
 const ENDED_SESSION_REASONS: ReadonlySet<string> = new Set([
   ...RESET_SESSION_REASONS,
   "deleted",
