@@ -21,12 +21,12 @@ import {
   externalCliDiscoveryForProviderAuth,
   removeProviderAuthProfilesWithLock,
 } from "../../agents/auth-profiles.js";
-import { resolveAuthStorePath } from "../../agents/auth-profiles/paths.js";
 import {
   listProfilesForProvider,
   promoteAuthProfileInOrder,
   upsertAuthProfileWithLockOrThrow,
 } from "../../agents/auth-profiles/profiles.js";
+import { resolveAuthProfileDatabasePath } from "../../agents/auth-profiles/sqlite.js";
 import {
   loadAuthProfileStoreForRuntime,
   resolvePersistedAuthProfileOwnerAgentDir,
@@ -800,7 +800,7 @@ export async function modelsAuthClearCooldownCommand(
       `Failed to clear cooldown state for auth profile "${profileId}". Wait a moment and retry.`,
     );
   }
-  if (resolveAuthStorePath(ownerAgentDir) !== resolveAuthStorePath(agentDir)) {
+  if (resolveAuthProfileDatabasePath(ownerAgentDir) !== resolveAuthProfileDatabasePath(agentDir)) {
     const ownerStoreCleared = await clearAuthProfileCooldown({
       store,
       profileId,
