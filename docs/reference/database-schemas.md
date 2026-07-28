@@ -29,6 +29,8 @@ OpenClaw applies forward-only migrations when it opens an older supported databa
 
 Installing OpenClaw manually through npm bypasses the updater guard. Database open checks still refuse an incompatible build.
 
+<!-- database-schema-history:start -->
+
 ## Agent schema history
 
 | Version | Change                                                                                                                                                                                                                                                         | First release                                   |
@@ -40,19 +42,27 @@ Installing OpenClaw manually through npm bypasses the updater guard. Database op
 | 7       | Per-entry lifecycle status projection ([#106151](https://github.com/openclaw/openclaw/pull/106151))                                                                                                                                                            | `v2026.7.2-beta.1`                              |
 | 8       | Per-transcript session provenance ([#106766](https://github.com/openclaw/openclaw/pull/106766))                                                                                                                                                                | `v2026.7.2-beta.2`                              |
 | 9       | `STRICT` tables ([#108663](https://github.com/openclaw/openclaw/pull/108663))                                                                                                                                                                                  | `v2026.7.2-beta.2`                              |
-| 10      | Materialized active transcript paths ([#108851](https://github.com/openclaw/openclaw/pull/108851))                                                                                                                                                             | Unreleased                                      |
-| 11      | Leases, durable delivery, conversation addresses, and heartbeat outcomes ([#109636](https://github.com/openclaw/openclaw/pull/109636), [#95838](https://github.com/openclaw/openclaw/pull/95838), [#109999](https://github.com/openclaw/openclaw/pull/109999)) | Unreleased                                      |
+| 10      | Materialized active transcript paths ([#108851](https://github.com/openclaw/openclaw/pull/108851))                                                                                                                                                             | `v2026.7.2-beta.3`                              |
+| 11      | Leases, durable delivery, conversation addresses, and heartbeat outcomes ([#109636](https://github.com/openclaw/openclaw/pull/109636), [#95838](https://github.com/openclaw/openclaw/pull/95838), [#109999](https://github.com/openclaw/openclaw/pull/109999)) | `v2026.7.2-beta.3`                              |
+| 12      | Session-owned ACP parent-stream events ([#110374](https://github.com/openclaw/openclaw/pull/110374))                                                                                                                                                           | `v2026.7.2-beta.5`                              |
+| 13-14   | Durable rewrite watermarks, logical session nodes, generation windows, and node-owned artifact foreign keys ([#113071](https://github.com/openclaw/openclaw/pull/113071))                                                                                      | `v2026.7.2-beta.5`                              |
+| 15      | Canonical board and session-sharing tables with upgrade data-loss rejection ([#113473](https://github.com/openclaw/openclaw/pull/113473))                                                                                                                      | `v2026.7.2-beta.5`                              |
+| 16      | Canonical persisted media facts and downgrade guard ([#113695](https://github.com/openclaw/openclaw/pull/113695))                                                                                                                                              | `v2026.7.2-beta.5`                              |
 
 Version 3 was an unshipped development step folded into version 4.
 
 ## State schema history
 
-| Version | Change                                                                                                   | First release       |
-| ------- | -------------------------------------------------------------------------------------------------------- | ------------------- |
-| 1       | Initial shared state database                                                                            | `v2026.5.30-beta.1` |
-| 2       | Metadata-only message audit events ([#103903](https://github.com/openclaw/openclaw/pull/103903))         | `v2026.7.2-beta.1`  |
-| 3       | `STRICT` tables and schema-drift hardening ([#108663](https://github.com/openclaw/openclaw/pull/108663)) | `v2026.7.2-beta.2`  |
-| 4       | Session watch provenance replaces encoded sentinel rows                                                  | Unreleased          |
+| Version | Change                                                                                                                           | First release       |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| 1       | Initial shared state database                                                                                                    | `v2026.5.30-beta.1` |
+| 2       | Metadata-only message audit events ([#103903](https://github.com/openclaw/openclaw/pull/103903))                                 | `v2026.7.2-beta.1`  |
+| 3       | `STRICT` tables and schema-drift hardening ([#108663](https://github.com/openclaw/openclaw/pull/108663))                         | `v2026.7.2-beta.2`  |
+| 4       | Session watch provenance replaces encoded sentinel rows                                                                          | `v2026.7.2-beta.3`  |
+| 5       | Durable cloud-worker result references on pending workspace fences ([#110952](https://github.com/openclaw/openclaw/pull/110952)) | `v2026.7.2-beta.5`  |
+| 6       | Canonical shared-state tables with upgrade data-loss rejection ([#113473](https://github.com/openclaw/openclaw/pull/113473))     | `v2026.7.2-beta.5`  |
+
+<!-- database-schema-history:end -->
 
 ## Integrity checks
 
