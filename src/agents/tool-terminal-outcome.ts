@@ -6,10 +6,10 @@ import {
 } from "./agent-tools.before-tool-call.state.js";
 import { extractApplyPatchTargets } from "./apply-patch-targets.js";
 import type { EmbeddedRunAttemptParams } from "./embedded-agent-runner/run/types.js";
+import { resolveExecCommandExcerpt } from "./tool-display-exec.js";
 import { createToolErrorState } from "./tool-error-state.js";
-import type { ToolErrorSummary } from "./tool-error-summary.js";
-import type { FileTarget } from "./tool-mutation.js";
-import { buildToolMutationState } from "./tool-mutation.js";
+import { isExecLikeToolName, type ToolErrorSummary } from "./tool-error-summary.js";
+import { buildToolMutationState, type FileTarget } from "./tool-mutation.js";
 
 function extractPatchFileTargets(
   toolName: string,
@@ -56,10 +56,14 @@ export function createToolTerminalObserver(
     let lastToolError: ToolErrorSummary | undefined;
     if (observation.outcome === "failure") {
       const mutatingAction = executionStarted && mutation.mutatingAction;
+      const commandExcerpt = isExecLikeToolName(observation.toolName)
+        ? resolveExecCommandExcerpt(executedArguments)
+        : undefined;
       const failure: ToolErrorSummary = {
         toolName: observation.toolName,
         ...(observation.meta ? { meta: observation.meta } : {}),
         ...observation.failure,
+        ...(commandExcerpt ? { commandExcerpt } : {}),
         mutatingAction,
         ...(mutatingAction && mutation.actionFingerprint
           ? { actionFingerprint: mutation.actionFingerprint }
