@@ -210,6 +210,10 @@ describe("skills workshop cli", () => {
     expect(review.content).toContain("Check current weather before advice.");
     expect(review.content).not.toContain("status: proposal");
 
+    await runCommand(["skills", "--json", "workshop", "review", proposalId!]);
+    const inheritedReview = JSON.parse(mocks.runtimeStdout.at(-1) ?? "{}") as typeof review;
+    expect(inheritedReview.mode).toBe("full");
+
     await runCommand(["skills", "workshop", "review", proposalId!]);
     expect(mocks.runtimeStdout.at(-1)).toContain(`Proposal: ${proposalId}\nVersion: v1`);
 
