@@ -77,6 +77,7 @@ const CURRENT_TRAIN_METHODS = [
   "node.protocolFeatures.update",
   "skills.proposals.evaluate",
   "skills.proposals.events.list",
+  "skills.proposals.review",
   "hooks.status",
   "tasks.retry",
   "tasks.dismiss",

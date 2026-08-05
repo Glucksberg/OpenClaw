@@ -535,6 +535,63 @@ async function runSkillProposalApply(
   });
 }
 
+async function runSkillProposalReview(
+  resolved: ResolvedSkillsWorkspace,
+  proposalId: string,
+): Promise<SkillProposalReviewResult> {
+  const { callGateway, isGatewayCredentialsRequiredError, isGatewayTransportError } =
+    await import("../gateway/call.js");
+  try {
+    return await callGateway<SkillProposalReviewResult>({
+      config: resolved.config,
+      method: "skills.proposals.review",
+      params: { agentId: resolved.agentId, proposalId },
+      timeoutMs: GATEWAY_SKILLS_STATUS_TIMEOUT_MS,
+      clientName: GATEWAY_CLIENT_NAMES.CLI,
+      mode: GATEWAY_CLIENT_MODES.CLI,
+      requiredMethods: ["skills.proposals.review"],
+    });
+  } catch (err) {
+    const isLocalTransportClosure =
+      isGatewayTransportError(err) &&
+      err.kind === "closed" &&
+      err.code === 1006 &&
+      err.connectionDetails.urlSource === "local loopback";
+    const isOfflineCandidate =
+      (isGatewayCredentialsRequiredError(err) &&
+        !normalizeOptionalString(process.env.OPENCLAW_GATEWAY_URL)) ||
+      isLocalTransportClosure;
+    if (resolved.config.gateway?.mode === "remote" || !isOfflineCandidate) {
+      throw err;
+    }
+    const { acquireGatewayLock } = await import("../infra/gateway-lock.js");
+    let lock: Awaited<ReturnType<typeof acquireGatewayLock>>;
+    try {
+      lock = await acquireGatewayLock({
+        allowInTests: true,
+        port: resolveGatewayPort(resolved.config, process.env),
+        role: "skill-workshop-review",
+        timeoutMs: GATEWAY_SKILLS_OFFLINE_LOCK_TIMEOUT_MS,
+      });
+    } catch {
+      throw err;
+    }
+    if (!lock) {
+      throw err;
+    }
+    try {
+      return await reviewSkillProposal({
+        workspaceDir: resolved.workspaceDir,
+        agentId: resolved.agentId,
+        config: resolved.config,
+        proposalId,
+      });
+    } finally {
+      await lock.release();
+    }
+  }
+}
+
 async function runSkillProposalEvaluate(
   resolved: ResolvedSkillsWorkspace,
   proposalId: string,
@@ -1085,8 +1142,8 @@ export function registerSkillsCli(program: Command) {
     .option("--json", "Output as JSON", false)
     .action(async (proposalId: string, opts: { json?: boolean; agent?: string }) => {
       try {
-        const { config, workspaceDir, agentId } = resolveSkillsWorkspaceForCommand(workshop, opts);
-        const review = await reviewSkillProposal({ workspaceDir, agentId, config, proposalId });
+        const resolved = resolveSkillsWorkspaceForCommand(workshop, opts);
+        const review = await runSkillProposalReview(resolved, proposalId);
         if (hasJsonOutput(opts)) {
           defaultRuntime.writeJson(review);
           return;
