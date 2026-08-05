@@ -117,13 +117,13 @@ flow:
             expr: scenarioRequests.length === 2
             message:
               expr: "`terminal delivery should stop before another provider continuation, saw ${scenarioRequests.length} requests`"
-        - set: matchingOutbound
+        - set: scenarioOutbound
           value:
-            expr: "state.getSnapshot().messages.slice(startIndex).filter((message) => message.direction === 'outbound' && message.conversation.id === config.conversationId && [config.progressMarker, config.finalMarker].includes(String(message.text ?? '')))"
+            expr: "state.getSnapshot().messages.slice(startIndex).filter((message) => message.direction === 'outbound' && message.conversation.id === config.conversationId)"
         - assert:
-            expr: "matchingOutbound.length === 2 && matchingOutbound[0]?.text === config.progressMarker && matchingOutbound[1]?.text === config.finalMarker"
+            expr: "scenarioOutbound.length === 2 && scenarioOutbound[0]?.text === config.progressMarker && scenarioOutbound[1]?.text === config.finalMarker"
             message:
-              expr: "`expected one ordered progress and final message, saw ${JSON.stringify(matchingOutbound)}`"
+              expr: "`expected the complete outbound transcript to contain only one ordered progress and final message, saw ${JSON.stringify(scenarioOutbound)}`"
         - call: readSessionTranscriptSummary
           saveAs: transcriptSummary
           args:
@@ -132,4 +132,4 @@ flow:
         - assert:
             expr: transcriptSummary.successfulToolCallCounts.message === 2
             message: source session did not persist exactly two successful message-tool results
-      detailsExpr: "`progress=${progressOutbound.text}; final=${finalOutbound.text}; providerRequests=${scenarioRequests.length}; successfulMessageCalls=${transcriptSummary.successfulToolCallCounts.message}`"
+      detailsExpr: "`progress=${progressOutbound.text}; final=${finalOutbound.text}; outboundMessages=${scenarioOutbound.length}; providerRequests=${scenarioRequests.length}; successfulMessageCalls=${transcriptSummary.successfulToolCallCounts.message}`"
