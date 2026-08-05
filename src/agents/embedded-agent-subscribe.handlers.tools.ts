@@ -1558,7 +1558,7 @@ export async function handleToolExecutionEnd(
       isError: isToolError,
     });
   const currentSourceReplyFinal = deliveredCurrentSourceReply
-    ? startArgs.final !== false
+    ? startArgs.final === true
     : undefined;
   const committedMediaUrls =
     didDeliverMessagingResult && isMessagingSend

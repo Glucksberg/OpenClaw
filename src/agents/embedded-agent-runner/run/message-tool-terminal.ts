@@ -95,9 +95,7 @@ function isTerminalSourceReplySend(params: {
   toolName: string;
   args: unknown;
 }): boolean {
-  return (
-    isImplicitMessageToolOnlySourceReplySend(params) && argsRecord(params.args).final !== false
-  );
+  return isImplicitMessageToolOnlySourceReplySend(params) && argsRecord(params.args).final === true;
 }
 
 /** Installs message-tool-only terminal guards and records source reply delivery evidence. */
@@ -120,7 +118,7 @@ export function installMessageToolOnlyTerminalHook(params: {
       }
     | { kind: "delivered" }
     | undefined;
-  const inFlightProgressSends = new Set<Promise<void>>();
+  const inFlightNonTerminalSends = new Set<Promise<void>>();
   const reserveTerminalSourceReply = (toolCallId: string) => {
     let settle!: (outcome: TerminalReservationOutcome) => void;
     const outcome = new Promise<TerminalReservationOutcome>((resolve) => {
@@ -142,7 +140,7 @@ export function installMessageToolOnlyTerminalHook(params: {
       state.settle("delivered");
     }
   };
-  const executeProgressSend = async (
+  const executeNonTerminalSend = async (
     tool: AgentTool,
     toolCallId: string,
     args: Parameters<AgentTool["execute"]>[1],
@@ -154,11 +152,11 @@ export function installMessageToolOnlyTerminalHook(params: {
       () => undefined,
       () => undefined,
     );
-    inFlightProgressSends.add(settled);
+    inFlightNonTerminalSends.add(settled);
     try {
       return await execution;
     } finally {
-      inFlightProgressSends.delete(settled);
+      inFlightNonTerminalSends.delete(settled);
     }
   };
   const wrappedTools = new WeakMap<AgentTool, AgentTool>();
@@ -190,13 +188,13 @@ export function installMessageToolOnlyTerminalHook(params: {
             await state.outcome;
             continue;
           }
-          if (argsRecord(args).final === false) {
-            return executeProgressSend(tool, toolCallId, args, signal, onUpdate);
+          if (argsRecord(args).final !== true) {
+            return executeNonTerminalSend(tool, toolCallId, args, signal, onUpdate);
           }
 
-          // Reserve before waiting so later progress cannot overtake final.
+          // Reserve before waiting so later non-terminal sends cannot overtake final.
           reserveTerminalSourceReply(toolCallId);
-          await Promise.all(inFlightProgressSends);
+          await Promise.all(inFlightNonTerminalSends);
           // The agent loop still runs afterToolCall when execute rejects. Keep
           // ownership until that hook classifies any late delivery evidence.
           return await tool.execute(toolCallId, args, signal, onUpdate);

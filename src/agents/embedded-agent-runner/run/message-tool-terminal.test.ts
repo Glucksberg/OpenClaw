@@ -1,6 +1,6 @@
 // Message-tool delivery tests cover message_tool_only delivery, where a
-// successful terminal source sends end the run after the current tool batch,
-// while `final: false` progress remains non-terminal.
+// successful `final: true` source sends end the run after the current tool
+// batch, while progress and omitted finality remain non-terminal.
 import type { Agent, AgentTool, AfterToolCallContext } from "openclaw/plugin-sdk/agent-core";
 import { describe, expect, it, vi } from "vitest";
 import { installMessageToolOnlyTerminalHook } from "./message-tool-terminal.js";
@@ -38,18 +38,18 @@ type TerminalHookCase = {
 describe("message-tool-only source replies", () => {
   it.each([
     {
-      label: "implicit successful send",
+      label: "implicit successful send with omitted finality",
       context: createAfterToolCallContext({
         toolName: "message",
         args: { action: "send", message: "visible reply" },
       }),
-      expected: true,
+      expected: false,
     },
     {
       label: "direct send result",
       context: createAfterToolCallContext({
         toolName: "message",
-        args: { action: "send", message: "visible reply" },
+        args: { action: "send", message: "visible reply", final: true },
         result: createDirectSendResult({ messageId: "discord-message-1" }),
       }),
       expected: true,
@@ -58,7 +58,7 @@ describe("message-tool-only source replies", () => {
       label: "gateway plugin send result",
       context: createAfterToolCallContext({
         toolName: "message",
-        args: { action: "send", message: "visible reply" },
+        args: { action: "send", message: "visible reply", final: true },
         result: {
           content: [{ type: "text", text: '{"message":{"id":"qa-message-1"}}' }],
           details: { message: { id: "qa-message-1" } },
@@ -70,7 +70,7 @@ describe("message-tool-only source replies", () => {
       label: "hook result delivery evidence",
       context: createAfterToolCallContext({
         toolName: "message",
-        args: { action: "send", message: "visible reply" },
+        args: { action: "send", message: "visible reply", final: true },
         result: createSuppressedSendResult(),
       }),
       hookResult: { details: { result: { messageId: "discord-message-2" } } },
@@ -198,7 +198,7 @@ describe("message-tool-only source replies", () => {
       agent.afterToolCall?.(
         createAfterToolCallContext({
           toolName: "message",
-          args: { action: "send", message: "visible reply" },
+          args: { action: "send", message: "visible reply", final: true },
         }),
       ),
     ).resolves.toEqual({
@@ -210,7 +210,7 @@ describe("message-tool-only source replies", () => {
     expect(onDeliveredSourceReply).toHaveBeenCalledTimes(1);
   });
 
-  it("records delivery evidence and terminates a default-final source send", async () => {
+  it("keeps omitted source-reply finality non-terminal", async () => {
     const agent = {} as unknown as Agent;
     const onDeliveredSourceReply = vi.fn();
     installMessageToolOnlyTerminalHook({
@@ -226,8 +226,11 @@ describe("message-tool-only source replies", () => {
           args: { action: "send", message: "visible reply" },
         }),
       ),
-    ).resolves.toEqual({ terminate: true });
-    expect(onDeliveredSourceReply).toHaveBeenCalledTimes(1);
+    ).resolves.toBeUndefined();
+    await expect(
+      agent.shouldStopAfterTurn?.({} as Parameters<NonNullable<Agent["shouldStopAfterTurn"]>>[0]),
+    ).resolves.toBe(false);
+    expect(onDeliveredSourceReply).not.toHaveBeenCalled();
   });
 
   it("allows progress before a terminal source reply and terminates only the final send", async () => {
@@ -244,7 +247,7 @@ describe("message-tool-only source replies", () => {
     });
     const messageTool = agent.state.tools[0];
     const progressArgs = { action: "send", message: "working", final: false };
-    const finalArgs = { action: "send", message: "done" };
+    const finalArgs = { action: "send", message: "done", final: true };
 
     const progressResult = await messageTool?.execute("progress", progressArgs);
     await expect(
@@ -298,6 +301,7 @@ describe("message-tool-only source replies", () => {
     const inFlight = messageTool?.execute("terminal", {
       action: "send",
       message: "done",
+      final: true,
     });
     const racedProgressPromise = messageTool?.execute("late-progress", {
       action: "send",
@@ -317,7 +321,7 @@ describe("message-tool-only source replies", () => {
       createAfterToolCallContext({
         toolCallId: "terminal",
         toolName: "message",
-        args: { action: "send", message: "done" },
+        args: { action: "send", message: "done", final: true },
         result: deliveredResult,
       }),
     );
@@ -369,7 +373,11 @@ describe("message-tool-only source replies", () => {
       message: "working",
       final: false,
     });
-    const terminal = messageTool?.execute("terminal", { action: "send", message: "done" });
+    const terminal = messageTool?.execute("terminal", {
+      action: "send",
+      message: "done",
+      final: true,
+    });
     await Promise.resolve();
     expect(messageExecute).toHaveBeenCalledTimes(1);
     releaseProgress({
@@ -403,7 +411,7 @@ describe("message-tool-only source replies", () => {
       sourceReplyDeliveryMode: "message_tool_only",
     });
     const messageTool = agent.state.tools[0];
-    const failedArgs = { action: "send", message: "first attempt" };
+    const failedArgs = { action: "send", message: "first attempt", final: true };
     const failedResult = await messageTool?.execute("failed", failedArgs);
     await agent.afterToolCall?.(
       createAfterToolCallContext({
@@ -417,6 +425,7 @@ describe("message-tool-only source replies", () => {
     const retryResult = await messageTool?.execute("retry", {
       action: "send",
       message: "second attempt",
+      final: true,
     });
     expect(messageExecute).toHaveBeenCalledTimes(2);
     expect(retryResult).toMatchObject({
@@ -439,7 +448,7 @@ describe("message-tool-only source replies", () => {
     });
     const messageTool = agent.state.tools[0];
 
-    const failedArgs = { action: "send", message: "first attempt" };
+    const failedArgs = { action: "send", message: "first attempt", final: true };
     await expect(messageTool?.execute("failed", failedArgs)).rejects.toThrow("gateway timeout");
     await agent.afterToolCall?.(
       createAfterToolCallContext({
@@ -454,7 +463,7 @@ describe("message-tool-only source replies", () => {
       }),
     );
     await expect(
-      messageTool?.execute("retry", { action: "send", message: "retry" }),
+      messageTool?.execute("retry", { action: "send", message: "retry", final: true }),
     ).resolves.toMatchObject({
       details: { sourceReply: { text: "retry" } },
     });
@@ -476,12 +485,13 @@ describe("message-tool-only source replies", () => {
       sourceReplyDeliveryMode: "message_tool_only",
     });
     const messageTool = agent.state.tools[0];
-    const failedArgs = { action: "send", message: "first attempt" };
+    const failedArgs = { action: "send", message: "first attempt", final: true };
 
     await expect(messageTool?.execute("failed", failedArgs)).rejects.toThrow("gateway timeout");
     const queuedSend = messageTool?.execute("queued", {
       action: "send",
       message: "duplicate",
+      final: true,
     });
     await Promise.resolve();
     expect(messageExecute).toHaveBeenCalledTimes(1);
@@ -523,7 +533,7 @@ describe("message-tool-only source replies", () => {
       onDeliveredSourceReply,
     });
     const messageTool = agent.state.tools[0];
-    const finalArgs = { action: "send", message: "done" };
+    const finalArgs = { action: "send", message: "done", final: true };
     const finalResult = await messageTool?.execute("final", finalArgs);
 
     await expect(
@@ -562,7 +572,7 @@ describe("message-tool-only source replies", () => {
     await agent.afterToolCall?.(
       createAfterToolCallContext({
         toolName: "message",
-        args: { action: "send", message: "done" },
+        args: { action: "send", message: "done", final: true },
       }),
     );
 
@@ -570,18 +580,20 @@ describe("message-tool-only source replies", () => {
       assistantMessage: createToolCallAssistant("message", {
         action: "send",
         message: "duplicate",
+        final: true,
       }),
       toolCall: {
         type: "toolCall",
         id: "deferred-message",
         name: "message",
-        arguments: { action: "send", message: "duplicate" },
+        arguments: { action: "send", message: "duplicate", final: true },
       },
       context: { systemPrompt: "", messages: [], tools: [] },
     });
     const repeatedResult = await deferredMessageTool?.execute("repeat", {
       action: "send",
       message: "duplicate",
+      final: true,
     });
 
     expect(messageExecute).not.toHaveBeenCalled();
@@ -612,17 +624,19 @@ describe("message-tool-only source replies", () => {
     const firstSend = rebuiltMessageTool?.execute("first", {
       action: "send",
       message: "done",
+      final: true,
     });
     const secondSend = rebuiltMessageTool?.execute("second", {
       action: "send",
       message: "duplicate",
+      final: true,
     });
     const firstResult = await firstSend;
     await agent.afterToolCall?.(
       createAfterToolCallContext({
         toolCallId: "first",
         toolName: "message",
-        args: { action: "send", message: "done" },
+        args: { action: "send", message: "done", final: true },
         result: firstResult,
       }),
     );
