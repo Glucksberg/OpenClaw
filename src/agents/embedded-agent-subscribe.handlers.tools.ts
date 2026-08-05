@@ -1558,7 +1558,9 @@ export async function handleToolExecutionEnd(
       isError: isToolError,
     });
   const currentSourceReplyFinal = deliveredCurrentSourceReply
-    ? startArgs.final === true
+    ? ctx.params.sourceReplyDeliveryMode === "message_tool_only"
+      ? startArgs.final === true
+      : true
     : undefined;
   const committedMediaUrls =
     didDeliverMessagingResult && isMessagingSend
