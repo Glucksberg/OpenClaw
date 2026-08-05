@@ -1087,7 +1087,7 @@ export function registerSkillsCli(program: Command) {
       try {
         const { config, workspaceDir, agentId } = resolveSkillsWorkspaceForCommand(workshop, opts);
         const review = await reviewSkillProposal({ workspaceDir, agentId, config, proposalId });
-        if (opts.json) {
+        if (hasJsonOutput(opts)) {
           defaultRuntime.writeJson(review);
           return;
         }
