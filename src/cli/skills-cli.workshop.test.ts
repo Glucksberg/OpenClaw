@@ -48,7 +48,11 @@ vi.mock("../runtime.js", () => ({
 
 vi.mock("../gateway/call.js", () => ({
   callGateway: vi.fn(async () => {
-    throw Object.assign(new Error("gateway unavailable"), { kind: "closed", code: 1006 });
+    throw Object.assign(new Error("gateway unavailable"), {
+      kind: "closed",
+      code: 1006,
+      connectionDetails: { urlSource: "local loopback" },
+    });
   }),
   isGatewayCredentialsRequiredError: () => false,
   isGatewayTransportError: () => true,
