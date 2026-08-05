@@ -105,6 +105,7 @@ export function installMessageToolOnlyTerminalHook(params: {
   agent: Agent;
   sourceReplyDeliveryMode?: SourceReplyDeliveryMode;
   onDeliveredSourceReply?: () => void;
+  setActiveToolTransform?: (transform: (tools: AgentTool[]) => AgentTool[]) => void;
 }): void {
   if (params.sourceReplyDeliveryMode !== "message_tool_only") {
     return;
@@ -160,11 +161,16 @@ export function installMessageToolOnlyTerminalHook(params: {
       inFlightProgressSends.delete(settled);
     }
   };
+  const wrappedTools = new WeakMap<AgentTool, AgentTool>();
   const wrapMessageTool = (tool: AgentTool): AgentTool => {
     if (tool.name !== "message") {
       return tool;
     }
-    return {
+    const cached = wrappedTools.get(tool);
+    if (cached) {
+      return cached;
+    }
+    const wrapped: AgentTool = {
       ...tool,
       execute: async (toolCallId, args, signal, onUpdate) => {
         const isImplicitSourceReply = isImplicitMessageToolOnlySourceReplySend({
@@ -197,10 +203,18 @@ export function installMessageToolOnlyTerminalHook(params: {
         }
       },
     };
+    wrappedTools.set(tool, wrapped);
+    wrappedTools.set(wrapped, wrapped);
+    return wrapped;
   };
-  const activeTools = params.agent.state?.tools;
-  if (activeTools) {
-    params.agent.state.tools = activeTools.map(wrapMessageTool);
+  const transformActiveTools = (tools: AgentTool[]) => tools.map(wrapMessageTool);
+  if (params.setActiveToolTransform) {
+    params.setActiveToolTransform(transformActiveTools);
+  } else {
+    const activeTools = params.agent.state?.tools;
+    if (activeTools) {
+      params.agent.state.tools = transformActiveTools(activeTools);
+    }
   }
   const previousResolveDeferredTool = params.agent.resolveDeferredTool?.bind(params.agent);
   if (previousResolveDeferredTool) {
@@ -251,7 +265,6 @@ export function installMessageToolOnlyTerminalHook(params: {
         params.onDeliveredSourceReply?.();
         return { ...hookResult, terminate: true };
       }
-      params.onDeliveredSourceReply?.();
       return hookResult;
     }
     if (isTerminalSourceReply) {

@@ -49,6 +49,7 @@ async function emitMessageToolLifecycle(params: {
   message: string;
   media?: string;
   to?: string | null;
+  final?: boolean;
   result: unknown;
 }) {
   // Message tool sends are modeled as normal tool start/end events because the
@@ -62,6 +63,7 @@ async function emitMessageToolLifecycle(params: {
       ...(params.to === null ? {} : { to: params.to ?? "+1555" }),
       message: params.message,
       media: params.media,
+      ...(params.final !== undefined ? { final: params.final } : {}),
     },
   });
   // Wait for async handler to complete.
@@ -145,6 +147,39 @@ describe("subscribeEmbeddedAgentSession", () => {
     });
 
     expect(onDeliveredMessageToolOnlySourceReply).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps progress delivery non-terminal until a final source reply exists", async () => {
+    const onDeliveredMessageToolOnlySourceReply = vi.fn();
+    const { emit, onBlockReply, subscription } = createBlockReplyHarness("message_end", {
+      sourceReplyDeliveryMode: "message_tool_only",
+      onDeliveredMessageToolOnlySourceReply,
+    });
+
+    await emitMessageToolLifecycle({
+      emit,
+      toolCallId: "tool-message-progress",
+      message: "Working…",
+      to: null,
+      final: false,
+      result: {
+        details: {
+          status: "ok",
+          deliveryStatus: "sent",
+          sourceReplySink: "internal-ui",
+          sourceReply: { text: "Working…" },
+        },
+      },
+    });
+    emitAssistantMessageEnd(emit, "Terminal fallback after progress.");
+    await vi.waitFor(() => {
+      expect(onBlockReply).toHaveBeenCalledTimes(1);
+    });
+
+    expect(onDeliveredMessageToolOnlySourceReply).not.toHaveBeenCalled();
+    expect(subscription.getMessagingToolSourceReplyPayloads()).toEqual([
+      { text: "Working…", sourceReplyFinal: false },
+    ]);
   });
 
   it("suppresses later text_end block replies after message-tool-only delivery", async () => {

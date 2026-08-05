@@ -272,7 +272,7 @@ describe("message-tool-only source replies", () => {
       message: "duplicate",
     });
     expect(messageExecute).toHaveBeenCalledTimes(2);
-    expect(onDeliveredSourceReply).toHaveBeenCalledTimes(2);
+    expect(onDeliveredSourceReply).toHaveBeenCalledTimes(1);
     expect(repeatedResult).toMatchObject({
       details: {
         status: "suppressed",
@@ -589,6 +589,49 @@ describe("message-tool-only source replies", () => {
       details: { status: "suppressed" },
       terminate: true,
     });
+  });
+
+  it("keeps the guard on message tools rebuilt by the session owner", async () => {
+    const messageExecute = vi.fn(async () => ({
+      content: [{ type: "text" as const, text: '{"deliveryStatus":"sent"}' }],
+      details: { deliveryStatus: "sent", sourceReply: { text: "done" } },
+    }));
+    const rawMessageTool = createAgentTool("message", messageExecute);
+    const agent = createAgentWithTools([rawMessageTool]);
+    let activeToolTransform: ((tools: AgentTool[]) => AgentTool[]) | undefined;
+    installMessageToolOnlyTerminalHook({
+      agent,
+      sourceReplyDeliveryMode: "message_tool_only",
+      setActiveToolTransform: (transform) => {
+        activeToolTransform = transform;
+        agent.state.tools = transform(agent.state.tools);
+      },
+    });
+
+    const rebuiltMessageTool = activeToolTransform?.([rawMessageTool])[0];
+    const firstSend = rebuiltMessageTool?.execute("first", {
+      action: "send",
+      message: "done",
+    });
+    const secondSend = rebuiltMessageTool?.execute("second", {
+      action: "send",
+      message: "duplicate",
+    });
+    const firstResult = await firstSend;
+    await agent.afterToolCall?.(
+      createAfterToolCallContext({
+        toolCallId: "first",
+        toolName: "message",
+        args: { action: "send", message: "done" },
+        result: firstResult,
+      }),
+    );
+
+    await expect(secondSend).resolves.toMatchObject({
+      details: { status: "suppressed" },
+      terminate: true,
+    });
+    expect(messageExecute).toHaveBeenCalledTimes(1);
   });
 
   it("leaves existing after-tool-call output alone when the send failed", async () => {
