@@ -184,7 +184,7 @@ describe("subscribeEmbeddedAgentSession", () => {
     ]);
   });
 
-  it("keeps omitted source-reply finality non-terminal for compatibility", async () => {
+  it("treats omitted source-reply finality as terminal for compatibility", async () => {
     const onDeliveredMessageToolOnlySourceReply = vi.fn();
     const { emit, onBlockReply, subscription } = createBlockReplyHarness("message_end", {
       sourceReplyDeliveryMode: "message_tool_only",
@@ -206,13 +206,13 @@ describe("subscribeEmbeddedAgentSession", () => {
       },
     });
     emitAssistantMessageEnd(emit, "Follow-up tool work completed.");
-    await vi.waitFor(() => {
-      expect(onBlockReply).toHaveBeenCalledTimes(1);
-    });
+    await Promise.resolve();
+    await Promise.resolve();
 
-    expect(onDeliveredMessageToolOnlySourceReply).not.toHaveBeenCalled();
+    expect(onBlockReply).not.toHaveBeenCalled();
+    expect(onDeliveredMessageToolOnlySourceReply).toHaveBeenCalledTimes(1);
     expect(subscription.getMessagingToolSourceReplyPayloads()).toEqual([
-      { text: "Starting the requested work.", sourceReplyFinal: false },
+      { text: "Starting the requested work.", sourceReplyFinal: true },
     ]);
   });
 

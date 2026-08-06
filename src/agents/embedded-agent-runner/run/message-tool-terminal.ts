@@ -2,7 +2,11 @@ import type { SourceReplyDeliveryMode } from "../../../auto-reply/get-reply-opti
 /**
  * Detects message-tool-only sends that delivered a visible source reply.
  */
-import { isDeliveredMessageToolOnlySourceReplyResult } from "../../embedded-agent-message-tool-source-reply.js";
+import {
+  isDeliveredMessageToolOnlySourceReplyResult,
+  readMessageToolSourceReplyFinal,
+  resolveMessageToolSourceReplyFinal,
+} from "../../embedded-agent-message-tool-source-reply.js";
 import type {
   AfterToolCallContext,
   AfterToolCallResult,
@@ -95,7 +99,10 @@ function isTerminalSourceReplySend(params: {
   toolName: string;
   args: unknown;
 }): boolean {
-  return isImplicitMessageToolOnlySourceReplySend(params) && argsRecord(params.args).final === true;
+  return (
+    isImplicitMessageToolOnlySourceReplySend(params) &&
+    resolveMessageToolSourceReplyFinal(argsRecord(params.args).final)
+  );
 }
 
 /** Installs message-tool-only terminal guards and records source reply delivery evidence. */
@@ -188,7 +195,7 @@ export function installMessageToolOnlyTerminalHook(params: {
             await state.outcome;
             continue;
           }
-          if (argsRecord(args).final !== true) {
+          if (!resolveMessageToolSourceReplyFinal(argsRecord(args).final)) {
             return executeNonTerminalSend(tool, toolCallId, args, signal, onUpdate);
           }
 
@@ -238,17 +245,17 @@ export function installMessageToolOnlyTerminalHook(params: {
       sourceReplyDeliveryMode: params.sourceReplyDeliveryMode,
       context,
     });
+    const rawSourceReplyFinal =
+      readMessageToolSourceReplyFinal(context.result) ?? isTerminalSourceReply;
     let hookResult: AfterToolCallResult | undefined;
     try {
       hookResult = await previousAfterToolCall?.(context, signal);
     } catch (error) {
-      if (isTerminalSourceReply) {
-        if (rawDeliveredSourceReply) {
-          markTerminalSourceReplyDelivered(context.toolCall.id);
-          params.onDeliveredSourceReply?.();
-        } else {
-          releaseTerminalReservation(context.toolCall.id);
-        }
+      if (rawDeliveredSourceReply && rawSourceReplyFinal) {
+        markTerminalSourceReplyDelivered(context.toolCall.id);
+        params.onDeliveredSourceReply?.();
+      } else if (isTerminalSourceReply) {
+        releaseTerminalReservation(context.toolCall.id);
       }
       throw error;
     }
@@ -258,10 +265,17 @@ export function installMessageToolOnlyTerminalHook(params: {
       hookResult,
     });
     if (deliveredSourceReply) {
-      if (isTerminalSourceReply) {
+      const sourceReplyFinal =
+        readMessageToolSourceReplyFinal(context.result) ??
+        readMessageToolSourceReplyFinal(hookResult) ??
+        isTerminalSourceReply;
+      if (sourceReplyFinal) {
         markTerminalSourceReplyDelivered(context.toolCall.id);
         params.onDeliveredSourceReply?.();
         return { ...hookResult, terminate: true };
+      }
+      if (isTerminalSourceReply) {
+        releaseTerminalReservation(context.toolCall.id);
       }
       return hookResult;
     }

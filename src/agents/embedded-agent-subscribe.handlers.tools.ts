@@ -55,7 +55,9 @@ import { normalizeTextForComparison } from "./embedded-agent-helpers.js";
 import {
   isDeliveredMessageToolOnlySourceReplyResult,
   isDeliveredMessagingToolResult,
+  readMessageToolSourceReplyFinal,
   readMessageToolSourceReplyText,
+  resolveMessageToolSourceReplyFinal,
 } from "./embedded-agent-message-tool-source-reply.js";
 import {
   isMessagingTool,
@@ -1559,7 +1561,8 @@ export async function handleToolExecutionEnd(
     });
   const currentSourceReplyFinal = deliveredCurrentSourceReply
     ? ctx.params.sourceReplyDeliveryMode === "message_tool_only"
-      ? startArgs.final === true
+      ? (readMessageToolSourceReplyFinal(result) ??
+        resolveMessageToolSourceReplyFinal(startArgs.final))
       : true
     : undefined;
   const committedMediaUrls =

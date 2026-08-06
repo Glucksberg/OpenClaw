@@ -1,6 +1,6 @@
 // Message-tool delivery tests cover message_tool_only delivery, where a
-// successful `final: true` source sends end the run after the current tool
-// batch, while progress and omitted finality remain non-terminal.
+// successful terminal source sends end the run after the current tool batch;
+// only explicit `final: false` remains non-terminal progress.
 import type { Agent, AgentTool, AfterToolCallContext } from "openclaw/plugin-sdk/agent-core";
 import { describe, expect, it, vi } from "vitest";
 import { installMessageToolOnlyTerminalHook } from "./message-tool-terminal.js";
@@ -43,7 +43,7 @@ describe("message-tool-only source replies", () => {
         toolName: "message",
         args: { action: "send", message: "visible reply" },
       }),
-      expected: false,
+      expected: true,
     },
     {
       label: "direct send result",
@@ -210,7 +210,7 @@ describe("message-tool-only source replies", () => {
     expect(onDeliveredSourceReply).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps omitted source-reply finality non-terminal", async () => {
+  it("treats omitted source-reply finality as terminal", async () => {
     const agent = {} as unknown as Agent;
     const onDeliveredSourceReply = vi.fn();
     installMessageToolOnlyTerminalHook({
@@ -224,6 +224,33 @@ describe("message-tool-only source replies", () => {
         createAfterToolCallContext({
           toolName: "message",
           args: { action: "send", message: "visible reply" },
+        }),
+      ),
+    ).resolves.toEqual({ terminate: true });
+    await expect(
+      agent.shouldStopAfterTurn?.({} as Parameters<NonNullable<Agent["shouldStopAfterTurn"]>>[0]),
+    ).resolves.toBe(true);
+    expect(onDeliveredSourceReply).toHaveBeenCalledTimes(1);
+  });
+
+  it("honors producer-owned progress evidence over omitted call arguments", async () => {
+    const agent = {} as unknown as Agent;
+    const onDeliveredSourceReply = vi.fn();
+    installMessageToolOnlyTerminalHook({
+      agent,
+      sourceReplyDeliveryMode: "message_tool_only",
+      onDeliveredSourceReply,
+    });
+
+    await expect(
+      agent.afterToolCall?.(
+        createAfterToolCallContext({
+          toolName: "message",
+          args: { action: "send", message: "visible reply" },
+          result: {
+            content: [{ type: "text", text: '{"deliveryStatus":"sent"}' }],
+            details: { deliveryStatus: "sent", sourceReplyFinal: false },
+          },
         }),
       ),
     ).resolves.toBeUndefined();

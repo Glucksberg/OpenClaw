@@ -4,6 +4,7 @@ import {
   embeddedAgentLog,
   finalizeHarnessContextEngineTurn,
   formatErrorMessage,
+  hasCompletedSourceReplyDeliveryEvidence,
   resolveContextEngineOwnerPluginId,
   runAgentHarnessLlmOutputHook,
   runHarnessContextEngineMaintenance,
@@ -37,7 +38,6 @@ import {
 import type { prepareCodexAttemptTurnRequest } from "./run-attempt-turn-request.js";
 import type { CodexAttemptTurnState } from "./run-attempt-turn-state.js";
 import { captureCodexSettledTurnFinalizationContext } from "./settled-turn-context.js";
-import { settleCodexSourceReplyFinality } from "./source-reply-finality.js";
 import { normalizeCodexTrajectoryError, recordCodexTrajectoryCompletion } from "./trajectory.js";
 import { codexTranscriptMirrorRuntime } from "./transcript-mirror.js";
 import {
@@ -283,10 +283,9 @@ export async function finalizeCodexAttempt(
     !effectiveTimedOut &&
     (finalPromptError === null || finalPromptError === undefined) &&
     (completedTurnStatus === "completed" || recoveredTurnWatchTimeout || locallyCompletedTurn);
-  // buildResult retains the bridge's delivery records. Resolve omitted final
-  // intent only after the authoritative turn outcome is known, before any
-  // terminal observer consumes the result.
-  const completedSourceReply = settleCodexSourceReplyFinality(toolBridge.telemetry, turnSucceeded);
+  // buildResult retains canonical source-delivery markers. Tool-only visible
+  // output must clear an otherwise stale empty/reasoning-only classification.
+  const completedSourceReply = turnSucceeded && hasCompletedSourceReplyDeliveryEvidence(result);
   if (completedSourceReply) {
     // Harness classification only sees assistant/reasoning/plan projections.
     // A reply delivered entirely through the source message tool is visible
