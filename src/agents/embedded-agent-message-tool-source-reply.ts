@@ -48,10 +48,7 @@ export function resolveMessageToolSourceReplyFinal(value: unknown): boolean {
 }
 
 /** Read the producer-owned finality marker from a message-tool result envelope. */
-export function readMessageToolSourceReplyFinal(
-  value: unknown,
-  depth = 0,
-): boolean | undefined {
+export function readMessageToolSourceReplyFinal(value: unknown, depth = 0): boolean | undefined {
   if (!value || typeof value !== "object" || depth > 4) {
     return undefined;
   }

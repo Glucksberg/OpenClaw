@@ -358,7 +358,9 @@ describe("message-tool source reply finality", () => {
     expect(
       readMessageToolSourceReplyFinal({ details: { payload: { sourceReplyFinal: true } } }),
     ).toBe(true);
-    expect(readMessageToolSourceReplyFinal({ details: { deliveryStatus: "sent" } })).toBeUndefined();
+    expect(
+      readMessageToolSourceReplyFinal({ details: { deliveryStatus: "sent" } }),
+    ).toBeUndefined();
   });
 });
 

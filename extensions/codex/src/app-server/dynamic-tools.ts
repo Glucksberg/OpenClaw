@@ -30,8 +30,6 @@ import {
   isMessagingToolSendAction,
   normalizeHeartbeatToolResponse,
   projectRuntimeToolInputSchema,
-  readMessageToolSourceReplyFinal,
-  resolveMessageToolSourceReplyFinal,
   resolveToolExecutionErrorKind,
   resolveToolResultFailureKind,
   runAgentHarnessAfterToolCallHook,
@@ -792,11 +790,7 @@ export function createCodexDynamicToolBridge(params: {
           params.hookContext?.sourceReplyDeliveryMode === "message_tool_only" &&
           toolName === "message" &&
           (toolConfirmedSourceReply || deliveredSourceReply || receiptConfirmedSourceReply);
-        const sourceReplyFinal = confirmedSourceReply
-          ? (readMessageToolSourceReplyFinal(rawResult) ??
-            readMessageToolSourceReplyFinal(result) ??
-            resolveMessageToolSourceReplyFinal(executedArgs.final))
-          : undefined;
+        const sourceReplyFinal = confirmedSourceReply ? executedArgs.final !== false : undefined;
         collectToolTelemetry({
           toolName,
           args: executedArgs,

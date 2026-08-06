@@ -4,7 +4,6 @@ import {
   embeddedAgentLog,
   finalizeHarnessContextEngineTurn,
   formatErrorMessage,
-  hasCompletedSourceReplyDeliveryEvidence,
   resolveContextEngineOwnerPluginId,
   runAgentHarnessLlmOutputHook,
   runHarnessContextEngineMaintenance,
@@ -46,6 +45,12 @@ import {
   markCodexAuthProfileBlockedFromRateLimits,
   refreshCodexUsageLimitPromptError,
 } from "./usage-limit-error.js";
+
+function hasCompletedCodexSourceReplyDelivery(result: EmbeddedRunAttemptResult): boolean {
+  return [result.messagingToolSentTargets, result.messagingToolSourceReplyPayloads].some(
+    (entries) => entries?.some((entry) => entry.sourceReplyFinal === true),
+  );
+}
 
 export async function finalizeCodexAttempt(
   resources: CodexAttemptResources,
@@ -285,7 +290,7 @@ export async function finalizeCodexAttempt(
     (completedTurnStatus === "completed" || recoveredTurnWatchTimeout || locallyCompletedTurn);
   // buildResult retains canonical source-delivery markers. Tool-only visible
   // output must clear an otherwise stale empty/reasoning-only classification.
-  const completedSourceReply = turnSucceeded && hasCompletedSourceReplyDeliveryEvidence(result);
+  const completedSourceReply = turnSucceeded && hasCompletedCodexSourceReplyDelivery(result);
   if (completedSourceReply) {
     // Harness classification only sees assistant/reasoning/plan projections.
     // A reply delivered entirely through the source message tool is visible

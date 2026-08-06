@@ -65,12 +65,7 @@ export { FAST_MODE_AUTO_PROGRESS_KIND } from "../auto-reply/reply-payload.js";
 export {
   isDeliveredMessageToolOnlySourceReplyResult,
   isDeliveredMessagingToolResult,
-  readMessageToolSourceReplyFinal,
-  resolveMessageToolSourceReplyFinal,
 } from "../agents/embedded-agent-message-tool-source-reply.js";
-export {
-  hasCompletedSourceReplyDeliveryEvidence,
-} from "../agents/embedded-agent-runner/delivery-evidence.js";
 export { formatFastModeAutoProgressText, resolveFastModeForElapsed } from "../shared/fast-mode.js";
 export type { AgentMessage } from "../agents/runtime/index.js";
 export type { FastModeAutoProgressState } from "../shared/fast-mode.js";
