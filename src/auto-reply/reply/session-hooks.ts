@@ -62,6 +62,7 @@ export function buildSessionEndHookPayload(params: {
   transcriptArchived?: boolean;
   nextSessionId?: string;
   nextSessionKey?: string;
+  resetToken?: string;
 }): {
   event: PluginHookSessionEndEvent;
   context: SessionHookContext;
@@ -77,6 +78,7 @@ export function buildSessionEndHookPayload(params: {
       transcriptArchived: params.transcriptArchived,
       nextSessionId: params.nextSessionId,
       nextSessionKey: params.nextSessionKey,
+      resetToken: params.resetToken,
     },
     context: buildSessionHookContext({
       sessionId: params.sessionId,

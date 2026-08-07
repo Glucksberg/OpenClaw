@@ -383,6 +383,10 @@ type CodexAppServerBindingMutation =
       expectedPreviousSessionId: string;
     }
   | {
+      /** Explicit reset may reopen the current physical generation after work has drained. */
+      kind: "reset-generation";
+    }
+  | {
       kind: "clear";
       threadId?: string;
       /** Only failed creation may clear the exact provisional supervision owner. */
@@ -560,6 +564,16 @@ export type CodexAppServerBindingStore = {
   resetSessionGeneration(
     identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
   ): Promise<CodexSessionGenerationRetirementResult>;
+  /** Records one successful reset for exact matching with its delayed session_end event. */
+  recordSessionGenerationReset(
+    identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
+    resetToken: string,
+  ): Promise<void>;
+  /** Consumes only the successful reset paired with this exact runtime-local token. */
+  consumeSessionGenerationReset(
+    identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
+    resetToken: string,
+  ): Promise<boolean>;
   retireSessionGeneration(
     identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
   ): Promise<CodexSessionGenerationRetirementResult>;
@@ -662,6 +676,16 @@ export function createCodexAppServerBindingStore(
   let pendingArchives = 0;
   let archiveTail = Promise.resolve();
   let bindingMutationsDrained: (() => void)[] = [];
+  // Gateway reset awaits the harness before emitting session_end in the same
+  // process. Keep exact transient tokens so duplicate or interleaved lifecycle
+  // events cannot consume a marker belonging to another logical reset. A marker
+  // lives until its matching end consumes it (or this runtime is disposed);
+  // evicting by insertion order could retire a valid reset whose end was delayed.
+  const pendingSessionGenerationEnds = new Set<string>();
+  const sessionGenerationEndKey = (
+    identity: Extract<CodexAppServerBindingIdentity, { kind: "session" }>,
+    resetToken: string,
+  ) => `${bindingStoreKey(identity)}\0${identity.sessionId.trim()}\0${resetToken.trim()}`;
 
   const waitForBindingMutations = async (): Promise<void> => {
     if (activeBindingMutations === 0) {
@@ -856,7 +880,7 @@ export function createCodexAppServerBindingStore(
         // clear. Keep provenance so migration cannot resurrect its stale thread.
         const retainLegacyClear =
           mutation.kind === "clear" && key.startsWith("conversation:legacy-");
-        return await transactKey(
+        const result = await transactKey(
           key,
           (current, leaseToken) => {
             const ownsGeneration = ownsStoredSessionGeneration(identity, current);
@@ -899,6 +923,26 @@ export function createCodexAppServerBindingStore(
               // an ordinary empty binding. Supervision adoption has an explicit generation
               // transfer path; every other successor fails closed and preserves this owner.
               if (current.state === "active" && current.binding.connectionScope === "supervision") {
+                return { result: false };
+              }
+              return {
+                result: true,
+                next: {
+                  version: 1,
+                  state: "cleared",
+                  sessionId: identity.sessionId,
+                  ...ownedLease,
+                },
+              };
+            }
+            if (mutation.kind === "reset-generation") {
+              if (identity.kind !== "session") {
+                return { result: false };
+              }
+              if (!current) {
+                return { result: true };
+              }
+              if (!ownsStoredSessionGeneration(identity, current)) {
                 return { result: false };
               }
               return {
@@ -998,10 +1042,13 @@ export function createCodexAppServerBindingStore(
           // the key afterwards is fenced by ownsStoredSessionGeneration on read
           // and displaced via reclaim-generation; durable stable-key fences come
           // from retireSessionGeneration, not runtime clears.
-          mutation.kind === "clear" && !retainLegacyClear && !leaseContext.getStore()?.has(key)
+          (mutation.kind === "clear" || mutation.kind === "reset-generation") &&
+            !retainLegacyClear &&
+            !leaseContext.getStore()?.has(key)
             ? 1
             : undefined,
         );
+        return result;
       });
     },
 
@@ -1066,6 +1113,25 @@ export function createCodexAppServerBindingStore(
           leaseContext.getStore()?.has(key) ? undefined : 1,
         );
       });
+    },
+
+    async recordSessionGenerationReset(identity, resetToken) {
+      if (!resetToken.trim()) {
+        return;
+      }
+      pendingSessionGenerationEnds.add(sessionGenerationEndKey(identity, resetToken));
+    },
+
+    async consumeSessionGenerationReset(identity, resetToken) {
+      if (!resetToken.trim()) {
+        return false;
+      }
+      const key = sessionGenerationEndKey(identity, resetToken);
+      if (!pendingSessionGenerationEnds.has(key)) {
+        return false;
+      }
+      pendingSessionGenerationEnds.delete(key);
+      return true;
     },
 
     async retireSessionGeneration(identity) {

@@ -270,6 +270,10 @@ export function createCodexAppServerAgentHarness(options: {
             `Codex binding generation changed before session ${params.sessionId} could reset`,
           );
         }
+        const resetToken = params.resetToken?.trim();
+        if (resetToken) {
+          await options.bindingStore.recordSessionGenerationReset(identity, resetToken);
+        }
       }
     },
     dispose: disposeSharedCodexAppServerClients,

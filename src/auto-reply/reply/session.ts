@@ -1058,6 +1058,12 @@ async function initSessionStateAttemptLocked(
     sessionStore,
   });
   const previousSessionTranscript = committed.previousSessionTranscript;
+  const retainedSessionReset =
+    previousSessionEntry?.sessionId === sessionId &&
+    previousSessionEndReason !== undefined &&
+    previousSessionEndReason !== "unknown";
+  const resetToken = retainedSessionReset ? crypto.randomUUID() : undefined;
+
   if (previousSessionEntry?.sessionId) {
     emitSessionAutoResetHook({
       cfg,
@@ -1090,6 +1096,7 @@ async function initSessionStateAttemptLocked(
       sessionKey,
       sessionFile: sessionKey,
       reason: previousSessionEndReason ?? "unknown",
+      resetToken,
     });
     // Direct-message browser tabs use a peer-scoped runtime identity even when
     // their transcript aliases main; cleanup must carry both exact keys.
@@ -1135,6 +1142,7 @@ async function initSessionStateAttemptLocked(
           sessionFile: previousSessionTranscript.sessionFile,
           transcriptArchived: previousSessionTranscript.transcriptArchived,
           nextSessionId: effectiveSessionId,
+          resetToken,
         });
         void runWithGatewayIndependentRootWorkContinuation(async () => {
           await hookRunner.runSessionEnd(payload.event, payload.context);

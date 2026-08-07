@@ -214,6 +214,8 @@ export type AgentHarnessResetParams = {
   sessionKey?: string;
   sessionFile?: string;
   reason?: "new" | "reset" | "idle" | "daily" | "compaction" | "deleted" | "unknown";
+  /** Correlates a successful harness reset with its matching delayed session_end hook. */
+  resetToken?: string;
 };
 
 export type AgentHarnessSessionForkFailureCode =

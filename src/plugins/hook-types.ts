@@ -814,6 +814,8 @@ export type PluginHookSessionEndEvent = {
   transcriptArchived?: boolean;
   nextSessionId?: string;
   nextSessionKey?: string;
+  /** Runtime-local token matching the harness reset that preceded this lifecycle event. */
+  resetToken?: string;
 };
 
 export type PluginHookSubagentContext = {
