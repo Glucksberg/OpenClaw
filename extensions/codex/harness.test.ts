@@ -291,14 +291,14 @@ describe("Codex agent harness reset()", () => {
       throw new Error("expected Codex harness reset hook");
     }
 
-    await expect(
-      harness.reset({
-        agentId: "worker",
-        sessionId: "session-1",
-        sessionKey: "agent:worker:main",
-        reason: "reset",
-      }),
-    ).resolves.toBeUndefined();
+    const resetParams = {
+      agentId: "worker",
+      sessionId: "session-1",
+      sessionKey: "agent:worker:main",
+      reason: "reset" as const,
+    };
+    await expect(harness.reset(resetParams)).resolves.toBeUndefined();
+    await expect(harness.reset(resetParams)).resolves.toBeUndefined();
   });
 
   it("clears an in-place session generation without stranding its replacement", async () => {
