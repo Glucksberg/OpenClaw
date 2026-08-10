@@ -1125,7 +1125,7 @@ describe("buildAgentSystemPrompt", () => {
     const sectionText = section.join("\n");
     expect(sectionText).toContain("Durable reusable skill/playbook/workflow work");
     expect(sectionText).toContain("`skill_workshop`");
-    expect(sectionText).toContain("Generated = pending proposal");
+    expect(sectionText).toContain("Other generated work = pending proposal");
     expect(sectionText).toContain("reuse expected_revision_hash for later pages/lifecycle");
     expect(sectionText).toContain("only explicit user ask");
 
