@@ -635,7 +635,7 @@ function sanitizeSupportValue(
       outputKey = `<redacted-${privateEntryLabel}-${privateEntryIndex}>`;
     }
     sanitized[outputKey] =
-      !config && isPrivateSupportField(entryKey)
+      !config && (key === "environment" || isPrivateSupportField(entryKey))
         ? "<redacted>"
         : sanitizeSupportValue(entryValue, redaction, entryKey, depth + 1, config);
   }
