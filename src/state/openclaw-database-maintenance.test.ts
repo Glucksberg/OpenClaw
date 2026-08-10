@@ -34,6 +34,35 @@ describe("OpenClaw database maintenance schema validation", () => {
     }
   });
 
+  it("keeps the current runtime compatible with the candidate's nullable state columns", () => {
+    const database = createGlobalDatabase();
+    try {
+      database.exec(`
+        ALTER TABLE worktrees ADD COLUMN run_end_cleanup_json TEXT;
+        ALTER TABLE worker_environments ADD COLUMN desktop_json TEXT;
+        ALTER TABLE worker_environments ADD COLUMN shared_host INTEGER;
+        ALTER TABLE worker_session_placements ADD COLUMN terminal_reason TEXT;
+        ALTER TABLE worker_session_placements ADD COLUMN terminal_at_ms INTEGER;
+        ALTER TABLE claw_installs ADD COLUMN bootstrap_source_path TEXT;
+        ALTER TABLE claw_installs ADD COLUMN bootstrap_content_digest TEXT;
+        ALTER TABLE claw_package_refs ADD COLUMN extension_id TEXT;
+        ALTER TABLE claw_package_refs ADD COLUMN extension_format TEXT;
+        ALTER TABLE claw_package_refs ADD COLUMN extension_detected_format TEXT;
+        ALTER TABLE claw_package_refs ADD COLUMN extension_mapped_json TEXT;
+        ALTER TABLE claw_package_refs ADD COLUMN extension_unavailable_json TEXT;
+        ALTER TABLE claw_package_refs ADD COLUMN extension_adapter_identity TEXT;
+      `);
+
+      expect(() =>
+        assertOpenClawStateDatabaseForMaintenance(database, {
+          pathname: "global.sqlite",
+        }),
+      ).not.toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
   it("accepts a global schema produced by an additive column migration", () => {
     const schemaWithoutMigratedColumn = OPENCLAW_STATE_SCHEMA_SQL.replace(
       "  delivery_thread_id_type TEXT,\n",

@@ -145,6 +145,42 @@ describe("assertSqliteSchemaContains", () => {
     }
   });
 
+  it("accepts only bare nullable future columns when forward compatibility is enabled", () => {
+    const database = createDatabase(CANONICAL_SCHEMA);
+    try {
+      database.exec("ALTER TABLE parents ADD COLUMN future_note TEXT;");
+      expect(() => assertSqliteSchemaContains(database, "test database", CANONICAL_SCHEMA)).toThrow(
+        "column definitions differ for parents",
+      );
+      expect(() =>
+        assertSqliteSchemaContains(database, "test database", CANONICAL_SCHEMA, {
+          allowCompatibleAdditiveColumns: true,
+        }),
+      ).not.toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
+  it.each([
+    "TEXT DEFAULT NULL",
+    "TEXT NOT NULL DEFAULT ''",
+    "TEXT COLLATE NOCASE",
+    "TEXT GENERATED ALWAYS AS ('value') VIRTUAL",
+  ])("rejects a constrained future column declared as %s", (definition) => {
+    const database = createDatabase(CANONICAL_SCHEMA);
+    try {
+      database.exec(`ALTER TABLE parents ADD COLUMN unsafe_note ${definition};`);
+      expect(() =>
+        assertSqliteSchemaContains(database, "test database", CANONICAL_SCHEMA, {
+          allowCompatibleAdditiveColumns: true,
+        }),
+      ).toThrow("column definitions differ for parents");
+    } finally {
+      database.close();
+    }
+  });
+
   it("accepts only allowlisted missing lazy-additive tables", () => {
     const migratedSchema = CANONICAL_SCHEMA.replace(
       / {2}CREATE TABLE events \([\s\S]*?\n {2}\);\n/u,

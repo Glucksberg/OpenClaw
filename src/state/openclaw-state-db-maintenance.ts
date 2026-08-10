@@ -19,6 +19,7 @@ import { resolveOpenClawStateSqlitePath } from "./openclaw-state-db.paths.js";
 import { OPENCLAW_STATE_SCHEMA_SQL } from "./openclaw-state-schema.js";
 
 const OPENCLAW_STATE_MAINTENANCE_SCHEMA_COMPATIBILITY = {
+  allowCompatibleAdditiveColumns: true,
   allowedMissingTables: LAZY_ADDITIVE_STATE_TABLES,
   allowedColumnDefinitions: {
     "diagnostic_events.sequence": ["sequence INTEGER NOT NULL DEFAULT 0"],

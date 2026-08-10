@@ -81,6 +81,12 @@ export type SqliteSchemaCompatibility = {
    */
   allowedColumnDefinitions?: Readonly<Record<string, readonly string[]>>;
   /**
+   * Allow unexpected columns declared as a name plus one bare nullable SQLite
+   * STRICT datatype. Constraints, defaults, generated values, and collations
+   * remain incompatible.
+   */
+  allowCompatibleAdditiveColumns?: boolean;
+  /**
    * Exact owner-defined trigger groups that may be absent when their derived
    * or lazily ensured schema is absent, but must be complete and canonical
    * when present.
@@ -441,14 +447,14 @@ function compareTableDefinitions(
     return actual === expected ? null : "table definition";
   }
   const allowedMissingColumns = new Set(compatibility.allowedMissingColumns ?? []);
-  const allowedMissingCount = [...expected.columns].filter(
-    ([columnName]) =>
-      !actual.columns.has(columnName) && allowedMissingColumns.has(`${tableName}.${columnName}`),
-  ).length;
-  if (actual.columns.size + allowedMissingCount !== expected.columns.size) {
-    return "column definitions";
-  }
-  if ([...actual.columns].some(([columnName]) => !expected.columns.has(columnName))) {
+  if (
+    [...actual.columns].some(
+      ([columnName, definition]) =>
+        !expected.columns.has(columnName) &&
+        (!compatibility.allowCompatibleAdditiveColumns ||
+          !isCompatibleAdditiveColumnDefinition(definition)),
+    )
+  ) {
     return "column definitions";
   }
   for (const [columnName, expectedDefinition] of expected.columns) {
@@ -465,6 +471,18 @@ function compareTableDefinitions(
     }
   }
   return isEqual(actual.constraints, expected.constraints) ? null : "table constraints";
+}
+
+const SQLITE_STRICT_DATATYPES = new Set(["ANY", "BLOB", "INT", "INTEGER", "REAL", "TEXT"]);
+
+function isCompatibleAdditiveColumnDefinition(definition: string): boolean {
+  const name = readSqlToken(definition, 0);
+  const type = name ? readSqlToken(definition, name.end) : null;
+  return Boolean(
+    type?.keyword &&
+    SQLITE_STRICT_DATATYPES.has(type.keyword) &&
+    definition.slice(type.end).trim().length === 0,
+  );
 }
 
 function parseTableDefinition(sql: string | null, tableName: string): SqliteTableDefinition {
