@@ -127,6 +127,15 @@ function firstMockArg(mock: unknown, label: string): unknown {
   return call[0];
 }
 
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function bridgeStartOptionsCall() {
   return firstMockArg(mocks.bridgeCodexAppServerStartOptions, "bridge start options") as {
     agentDir?: string;
@@ -1969,6 +1978,81 @@ describe("shared Codex app-server client", () => {
     });
     expect(harness.process.stdin.destroyed).toBe(true);
     releaseRetain?.();
+  });
+
+  it("waits for physical exit of detached clients that are already logically closed", async () => {
+    await withTempDir("openclaw-codex-shared-exit-", async (tempDir) => {
+      const fixturePath = path.join(tempDir, "app-server.mjs");
+      await fs.writeFile(
+        fixturePath,
+        [
+          'import readline from "node:readline";',
+          "const lines = readline.createInterface({ input: process.stdin });",
+          'lines.on("line", (line) => {',
+          "  const message = JSON.parse(line);",
+          '  if (message.method === "initialize") {',
+          `    process.stdout.write(JSON.stringify({ id: message.id, result: { userAgent: "openclaw/${CODEX_APP_SERVER_VERSION} (Linux; test)" } }) + "\\n");`,
+          "  }",
+          "});",
+          "setInterval(() => undefined, 1000);",
+        ].join("\n"),
+        "utf8",
+      );
+      const pids: number[] = [];
+      let releaseRetain: (() => void) | undefined;
+      try {
+        const startOptions = {
+          transport: "stdio" as const,
+          command: process.execPath,
+          commandSource: "config" as const,
+          args: [fixturePath],
+          headers: {},
+          env: { OPENCLAW_QA_PARENT_PID: String(process.pid) },
+        };
+        const first = await getLeasedSharedCodexAppServerClient({
+          timeoutMs: 3_000,
+          agentDir: path.join(tempDir, "first"),
+          startOptions,
+        });
+        const firstPid = first.getTransportPid();
+        expect(firstPid).toBeGreaterThan(0);
+        pids.push(firstPid as number);
+        releaseRetain = retainSharedCodexAppServerClientIfCurrent(first);
+        expect(releaseRetain).toBeTypeOf("function");
+        expect(releaseLeasedSharedCodexAppServerClient(first)).toBe(true);
+        expect(retireSharedCodexAppServerClientIfCurrent(first)).toEqual({
+          activeLeases: 1,
+          closed: false,
+        });
+        first.close();
+        expect(isProcessRunning(firstPid as number)).toBe(true);
+
+        const second = await getSharedCodexAppServerClient({
+          timeoutMs: 3_000,
+          agentDir: path.join(tempDir, "second"),
+          startOptions,
+        });
+        const secondPid = second.getTransportPid();
+        expect(secondPid).toBeGreaterThan(0);
+        pids.push(secondPid as number);
+
+        const startedAt = Date.now();
+        await clearSharedCodexAppServerClientAndWait({
+          exitTimeoutMs: 500,
+          forceKillDelayMs: 20,
+        });
+        expect(Date.now() - startedAt).toBeLessThan(900);
+        expect(isProcessRunning(firstPid as number)).toBe(false);
+        expect(isProcessRunning(secondPid as number)).toBe(false);
+      } finally {
+        releaseRetain?.();
+        for (const pid of pids) {
+          if (isProcessRunning(pid)) {
+            process.kill(pid, "SIGKILL");
+          }
+        }
+      }
+    });
   });
 
   it("waits only for the shared client that is still current", async () => {
