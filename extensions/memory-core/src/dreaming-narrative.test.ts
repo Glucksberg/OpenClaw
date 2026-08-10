@@ -5,7 +5,11 @@ import { RequestScopedSubagentRuntimeError } from "openclaw/plugin-sdk/error-run
 import { createDeferred } from "openclaw/plugin-sdk/extension-shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readRecentDreamDiaryEntries, writeBackfillDiaryEntries } from "./dreaming-dreams-file.js";
-import { runDreamNarrative, type DreamingCompletion } from "./dreaming-narrative.js";
+import {
+  drainDetachedDreamNarrativeJobs,
+  runDreamNarrative,
+  type DreamingCompletion,
+} from "./dreaming-narrative.js";
 import { forgetMemoryEntries } from "./memory-forget.js";
 import { SESSION_CORPUS_RELATIVE_DIR } from "./session-ingestion.js";
 import { readShortTermRecallEntries, recordShortTermRecalls } from "./short-term-promotion.js";
@@ -193,12 +197,11 @@ describe("runDreamNarrative", () => {
         } else {
           completion.resolve({ text: "A detached memory found its page." });
         }
-        await vi.waitFor(async () => {
-          const diary = await fs.readFile(path.join(workspaceDir, "DREAMS.md"), "utf8");
-          expect(diary).toContain(
-            reject ? "A memory trace surfaced" : "A detached memory found its page.",
-          );
-        });
+        await drainDetachedDreamNarrativeJobs();
+        const diary = await fs.readFile(path.join(workspaceDir, "DREAMS.md"), "utf8");
+        expect(diary).toContain(
+          reject ? "A memory trace surfaced" : "A detached memory found its page.",
+        );
         expect(unhandled).not.toHaveBeenCalled();
       } finally {
         completion.resolve({ text: "settled" });
