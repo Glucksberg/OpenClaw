@@ -562,6 +562,87 @@ export function sanitizeSupportSnapshotValue(
   depth = 0,
 ): unknown {
   return sanitizeSupportValue(value, redaction, key, depth, false);
+  /*
+  if (value == null || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return isPrivateSupportField(key) ? "<redacted>" : value;
+  }
+  if (typeof value === "string") {
+    return isPrivateSupportField(key) ? "<redacted>" : redactSupportString(value, redaction);
+  }
+  if (depth >= MAX_SUPPORT_SNAPSHOT_DEPTH) {
+    return "<truncated>";
+  }
+  if (Array.isArray(value)) {
+    const { count, items } = limitedSupportArray(value);
+    if (key === "programArguments") {
+      // Command arguments get flag-aware redaction so "--token value" redacts the following item.
+      return supportArrayResult(sanitizeCommandArguments(items, redaction), count);
+    }
+    return supportArrayResult(
+      items.map((entry) => sanitizeSupportSnapshotValue(entry, redaction, key, depth + 1)),
+      count,
+    );
+  }
+  const record = asOptionalRecord(value);
+  if (!record) {
+    return "<unsupported>";
+  }
+  if (PRIVATE_MAP_SUPPORT_FIELD_RE.test(key)) {
+    return { count: countOwnObjectEntries(record) };
+  }
+  const sanitized = createSupportRecord();
+  const { count, entries } = limitedSupportObjectEntries(record);
+  for (const { key: entryKey, value: entryValue } of entries) {
+    sanitized[entryKey] = isPrivateSupportField(entryKey)
+      ? "<redacted>"
+      : sanitizeSupportSnapshotValue(entryValue, redaction, entryKey, depth + 1);
+  }
+  addTruncationMetadata(sanitized, count);
+  return sanitized;
+  if (value == null || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return isPrivateSupportField(key) ? "<redacted>" : value;
+  }
+  if (typeof value === "string") {
+    return isPrivateSupportField(key) ? "<redacted>" : redactSupportString(value, redaction);
+  }
+  if (depth >= MAX_SUPPORT_SNAPSHOT_DEPTH) {
+    return "<truncated>";
+  }
+  if (Array.isArray(value)) {
+    const { count, items } = limitedSupportArray(value);
+    if (key === "programArguments") {
+      // Command arguments get flag-aware redaction so "--token value" redacts the following item.
+      return supportArrayResult(sanitizeCommandArguments(items, redaction), count);
+    }
+    return supportArrayResult(
+      items.map((entry) => sanitizeSupportSnapshotValue(entry, redaction, key, depth + 1)),
+      count,
+    );
+  }
+  const record = asOptionalRecord(value);
+  if (!record) {
+    return "<unsupported>";
+  }
+  if (PRIVATE_MAP_SUPPORT_FIELD_RE.test(key)) {
+    return { count: countOwnObjectEntries(record) };
+  }
+  const sanitized = createSupportRecord();
+  const { count, entries } = limitedSupportObjectEntries(record);
+  for (const { key: entryKey, value: entryValue } of entries) {
+    sanitized[entryKey] =
+      key === "environment" || isPrivateSupportField(entryKey)
+        ? "<redacted>"
+        : sanitizeSupportSnapshotValue(entryValue, redaction, entryKey, depth + 1);
+  }
+  addTruncationMetadata(sanitized, count);
+  return sanitized;
+  */
 }
 
 /** Sanitizes config-shaped values with stricter private field handling. */
@@ -635,7 +716,7 @@ function sanitizeSupportValue(
       outputKey = `<redacted-${privateEntryLabel}-${privateEntryIndex}>`;
     }
     sanitized[outputKey] =
-      !config && isPrivateSupportField(entryKey)
+      !config && (key === "environment" || isPrivateSupportField(entryKey))
         ? "<redacted>"
         : sanitizeSupportValue(entryValue, redaction, entryKey, depth + 1, config);
   }
