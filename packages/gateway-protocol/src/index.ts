@@ -495,6 +495,8 @@ export {
   SkillsProposalsListResultSchema,
   SkillsProposalInspectParamsSchema,
   SkillsProposalInspectResultSchema,
+  SkillsProposalReviewParamsSchema,
+  SkillsProposalReviewResultSchema,
   SkillsProposalCreateParamsSchema,
   SkillsProposalUpdateParamsSchema,
   SkillsProposalReviseParamsSchema,
