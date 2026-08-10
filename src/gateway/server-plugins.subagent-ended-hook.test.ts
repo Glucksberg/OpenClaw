@@ -337,6 +337,27 @@ describe("createGatewaySubagentRuntime.run subagent_ended tracking (#59164)", ()
     });
   });
 
+  test("aborts a plugin subagent run through sessions.abort", async () => {
+    const serverPlugins = await loadServerPlugins();
+    const runtime = serverPlugins.createGatewaySubagentRuntime();
+    serverPlugins.setFallbackGatewayContext(createTestContext("plugin-abort", createTestCfg()));
+
+    handleGatewayRequest.mockImplementation(async (opts: HandleGatewayRequestOptions) => {
+      if (opts.req.method === "sessions.abort") {
+        opts.respond(true, { aborted: true });
+        return;
+      }
+      opts.respond(true, {});
+    });
+
+    await expect(runtime.cancelRun?.({ runId: "plugin-run-stuck" })).resolves.toEqual({
+      aborted: true,
+    });
+    const request = lastGatewayRequest();
+    expect(request.req.method).toBe("sessions.abort");
+    expect(request.req.params).toEqual({ runId: "plugin-run-stuck" });
+  });
+
   test("normalizes malformed completed wait errors for plugin subagents", async () => {
     const serverPlugins = await loadServerPlugins();
     const runtime = serverPlugins.createGatewaySubagentRuntime();

@@ -19,6 +19,7 @@ import { appendSqliteSessionTranscriptEventForTest } from "openclaw/plugin-sdk/s
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   dedupeDreamDiaryEntries,
+  drainDetachedDreamNarrativeJobs,
   readRecentDreamDiaryEntries,
   removeBackfillDiaryEntries,
   runDreamNarrative,
@@ -388,6 +389,7 @@ describe("runDreamNarrative", () => {
     return {
       run: vi.fn().mockResolvedValue({ runId: "run-123" }),
       waitForRun: vi.fn().mockResolvedValue({ status: "ok" }),
+      cancelRun: vi.fn().mockResolvedValue({ aborted: true }),
       getSessionMessages: vi.fn().mockResolvedValue({
         messages: [
           { role: "user", content: "prompt" },
@@ -798,11 +800,12 @@ describe("runDreamNarrative", () => {
     expect(content).toContain("A memory trace surfaced, but details were unavailable in this run.");
   });
 
-  it("skips extra settle waits after timeout and still attempts cleanup", async () => {
+  it("physically cancels a timed-out run and waits for terminal state before cleanup", async () => {
     const workspaceDir = await createTempWorkspace("openclaw-dreaming-narrative-");
     const subagent = createMockSubagent("");
-    subagent.waitForRun.mockResolvedValueOnce({ status: "timeout" });
-    subagent.deleteSession.mockRejectedValue(new Error("still active"));
+    subagent.waitForRun
+      .mockResolvedValueOnce({ status: "timeout" })
+      .mockResolvedValueOnce({ status: "error", error: "aborted" });
     const logger = createMockLogger();
 
     const outcome = await runDreamNarrative({
@@ -813,10 +816,12 @@ describe("runDreamNarrative", () => {
       logger,
     });
 
-    expect(subagent.waitForRun).toHaveBeenCalledOnce();
+    expect(subagent.cancelRun).toHaveBeenCalledWith({ runId: "run-123" });
+    expect(subagent.waitForRun).toHaveBeenCalledTimes(2);
     expect(mockObjectArg(subagent.waitForRun, "wait for run").timeoutMs).toBe(60_000);
-    expectLogIncludes(logger.warn, "narrative session cleanup failed for rem phase");
-    expect(outcome).toEqual({ status: "degraded", error: "still active" });
+    expect(mockObjectArg(subagent.waitForRun, "wait for cancelled run", 1).timeoutMs).toBe(10_000);
+    expect(subagent.deleteSession).toHaveBeenCalled();
+    expect(outcome).toEqual({ status: "completed" });
   });
 
   it("handles subagent error gracefully", async () => {
@@ -1335,6 +1340,40 @@ describe("runDreamNarrative detached dispatch", () => {
     });
     expect(subagent.run).toHaveBeenCalledTimes(5);
     expect(subagent.waitForRun).toHaveBeenCalledTimes(5);
+  });
+
+  it("drains accepted detached narratives before the owning sweep can finish", async () => {
+    const waiting = deferred<{ status: string }>();
+    const subagent = {
+      run: vi.fn().mockResolvedValue({ runId: "run-drain" }),
+      waitForRun: vi.fn(() => waiting.promise),
+      getSessionMessages: vi.fn().mockResolvedValue({ messages: [] }),
+      deleteSession: vi.fn().mockResolvedValue(undefined),
+    };
+    const workspaceDir = await createTempWorkspace("openclaw-dreaming-detach-drain-");
+    const logger = createMockLogger();
+
+    await runDreamNarrative({
+      agentId: "main",
+      subagent,
+      workspaceDir,
+      data: { phase: "light", snippets: ["fragment"] },
+      nowMs: Date.parse("2026-04-28T03:00:00Z"),
+      logger,
+      detached: true,
+    });
+    const drained = vi.fn();
+    const drain = drainDetachedDreamNarrativeJobs().then(drained);
+
+    await vi.waitFor(() => {
+      expect(subagent.waitForRun).toHaveBeenCalledOnce();
+    });
+    expect(drained).not.toHaveBeenCalled();
+
+    waiting.resolve({ status: "ok" });
+    await drain;
+    expect(drained).toHaveBeenCalledOnce();
+    expect(subagent.deleteSession).toHaveBeenCalledTimes(2);
   });
 
   it("serializes detached narratives that reuse a workspace and phase session", async () => {

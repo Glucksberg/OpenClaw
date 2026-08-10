@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Gateway plugin runtime methods share request scope and lifecycle state. */
 // Gateway plugin runtime adapter.
 // Loads plugin registries and builds fallback request context for non-WS paths.
 import { randomUUID } from "node:crypto";
@@ -328,6 +329,26 @@ export function createGatewaySubagentRuntime(): PluginRuntime["subagent"] {
         ...(status !== "ok" &&
           typeof payload?.error === "string" &&
           payload.error && { error: payload.error }),
+      };
+    },
+    async cancelRun(params) {
+      const scope = getPluginRuntimeGatewayRequestScope();
+      const pluginId =
+        typeof scope?.pluginId === "string" && scope.pluginId.trim()
+          ? scope.pluginId.trim()
+          : undefined;
+      const payload = await dispatchGatewayMethodInProcess<{
+        aborted?: boolean;
+        runIds?: unknown[];
+      }>(
+        "sessions.abort",
+        { runId: params.runId },
+        pluginId ? { pluginRuntimeOwnerId: pluginId } : undefined,
+      );
+      return {
+        aborted:
+          payload?.aborted === true ||
+          (Array.isArray(payload?.runIds) && payload.runIds.includes(params.runId)),
       };
     },
     getSessionMessages,

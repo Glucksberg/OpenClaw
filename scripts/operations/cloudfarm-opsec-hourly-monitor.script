@@ -1,0 +1,105 @@
+const previous = trigger.state && typeof trigger.state === "object" ? trigger.state : {};
+const cycle = Number.isInteger(previous.cycle) && previous.cycle >= 0 ? previous.cycle + 1 : 1;
+const sourceCursor = Number.isInteger(previous.sourceCursor) && previous.sourceCursor >= 0
+  ? previous.sourceCursor
+  : 0;
+const failures = [];
+const observations = [];
+let toolCalls = 0;
+const cloudfarmRoot = "/home/dev/projects/CloudFarm";
+const sourceCheck = "/home/dev/.openclaw/releases/current/scripts/operations/cloudfarm-opsec-source-check.cjs";
+const recordFailure = (error) => {
+  if (failures.length < 12) {
+    failures.push(String(error).slice(0, 500));
+  }
+};
+
+const outputOf = (result) => String(
+  result?.result?.details?.aggregated ??
+  result?.details?.aggregated ??
+  result?.output ??
+  "",
+).trim();
+const run = async (command, timeout) => {
+  toolCalls += 1;
+  try {
+    return outputOf(await tools.call("exec", {
+      command,
+      timeout,
+      workdir: cloudfarmRoot,
+      env: { CLOUDFARM_ROOT: cloudfarmRoot },
+    }));
+  } catch (error) {
+    recordFailure(error?.message ?? error);
+    return "";
+  }
+};
+
+const pm2Raw = await run("pm2 status cloudfarm-api", 20);
+const processOnline = /cloudfarm-api[^\n]*online/i.test(pm2Raw);
+observations.push(`process=${processOnline ? "online" : "failed"}`);
+if (!processOnline) recordFailure("cloudfarm-api is not online");
+
+const mongo = await run("mongosh --eval \"db.adminCommand('ping').ok\" --quiet", 20);
+observations.push(`mongo=${mongo === "1" ? "ok" : "failed"}`);
+if (mongo !== "1") recordFailure("MongoDB ping failed");
+
+const logProbe = await run(
+  "pm2 logs cloudfarm-api --lines 200 --nostream 2>/dev/null | tail -200",
+  20,
+);
+const exceptionCount = (logProbe.match(/error|exception|fatal|crash/gi) ?? []).length;
+const http5xxCount = (logProbe.match(/(?:status[^\n]*5\d\d|HTTP 5)/gi) ?? []).length;
+observations.push(`exceptions=${exceptionCount}`, `http5xx=${http5xxCount}`);
+if (exceptionCount > 0) recordFailure(`recent exception markers=${exceptionCount}`);
+if (http5xxCount > 5) recordFailure(`recent HTTP 5xx markers=${http5xxCount}`);
+
+let nextSourceCursor = sourceCursor;
+let sourcesDone = 0;
+let sourcesRemaining = 0;
+if (cycle % 4 === 0) {
+  const sourceListRaw = await run(
+    `node ${sourceCheck} --list`,
+    20,
+  );
+  const sources = sourceListRaw.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+  const batchSize = Math.min(2, sources.length);
+  for (let offset = 0; offset < batchSize; offset += 1) {
+    const index = (sourceCursor + offset) % sources.length;
+    const source = sources[index];
+    const encoded = encodeURIComponent(source).replace(
+      /[!'()*]/g,
+      (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+    const resultRaw = await run(
+      `node ${sourceCheck} ${encoded}`,
+      70,
+    );
+    sourcesDone += 1;
+    try {
+      const result = JSON.parse(resultRaw);
+      observations.push(`source=${source}:${result.status ?? "unknown"}`);
+      if (result.status !== "ok" && result.status !== "healed") {
+        recordFailure(`source ${source}: ${result.error ?? result.status ?? "failed"}`);
+      }
+    } catch {
+      recordFailure(`source ${source}: invalid or missing result`);
+    }
+    nextSourceCursor = (index + 1) % sources.length;
+  }
+  sourcesRemaining = Math.max(0, sources.length - sourcesDone);
+}
+
+const report = `CloudFarm OPSEC checkpoint cycle=${cycle} done=${sourcesDone} remaining=${sourcesRemaining} cursor=${nextSourceCursor} toolCalls=${toolCalls} errors=${failures.length}; ${observations.join(", ")}`;
+return {
+  ...(failures.length > 0 ? { notify: `🔒 OpSec Health Check\n\n${report}\n${failures.join("; ")}` } : {}),
+  state: {
+    version: 1,
+    cycle,
+    sourceCursor: nextSourceCursor,
+    done: sourcesDone,
+    remaining: sourcesRemaining,
+    errors: failures,
+    lastReport: report,
+  },
+};

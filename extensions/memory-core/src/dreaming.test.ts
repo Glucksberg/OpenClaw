@@ -1376,6 +1376,7 @@ describe("gateway startup reconciliation", () => {
       const payload = requireAgentTurnPayload(addCall.payload);
       expect(payload.message).toBe(constants.DREAMING_SYSTEM_EVENT_TEXT);
       expect(payload.lightContext).toBe(true);
+      expect(payload.timeoutSeconds).toBe(300);
     } finally {
       vi.useRealTimers();
       clearInternalHooks();

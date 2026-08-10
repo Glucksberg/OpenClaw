@@ -28,19 +28,27 @@ import { peekSystemEventEntries } from "openclaw/plugin-sdk/system-event-runtime
 import { appendFailedDreamingEvent } from "./dreaming-events.js";
 import type { NarrativePhaseData } from "./dreaming-narrative.js";
 import { formatErrorMessage, includesSystemEventToken } from "./dreaming-shared.js";
+import {
+  acquireDreamingSweepLeaseGuard,
+  checkpointDreamingSweep,
+  DREAMING_MAX_WORKSPACES_PER_RUN,
+  readDreamingSweepCursor,
+  selectDreamingWorkspaceBatch,
+} from "./dreaming-sweep-budget.js";
 
 const RUNTIME_CRON_RECONCILE_INTERVAL_MS = 60_000;
 const STARTUP_CRON_RETRY_DELAY_MS = 5_000;
 const STARTUP_CRON_RETRY_MAX_ATTEMPTS = 12;
 const HEARTBEAT_ISOLATED_SESSION_SUFFIX = ":heartbeat";
 const MANAGED_DREAMING_DECLARATION_KEY = "memory-core:memory-dreaming-promotion";
+const MANAGED_DREAMING_TIMEOUT_SECONDS = 300;
 
 type Logger = Pick<OpenClawPluginApi["logger"], "info" | "warn" | "error">;
 
 type CronSchedule = { kind: "cron"; expr: string; tz?: string };
 type CronPayload =
   | { kind: "systemEvent"; text: string }
-  | { kind: "agentTurn"; message: string; lightContext?: boolean };
+  | { kind: "agentTurn"; message: string; lightContext?: boolean; timeoutSeconds?: number };
 type ManagedCronJobCreate = {
   declarationKey: string;
   name: string;
@@ -86,6 +94,7 @@ type ManagedCronJobLike = {
     text?: string;
     message?: string;
     lightContext?: boolean;
+    timeoutSeconds?: number;
   };
   delivery?: {
     mode?: string;
@@ -188,6 +197,7 @@ function buildManagedDreamingCronJob(
       kind: "agentTurn",
       message: DREAMING_SYSTEM_EVENT_TEXT,
       lightContext: true,
+      timeoutSeconds: MANAGED_DREAMING_TIMEOUT_SECONDS,
     },
     // Dreaming is a maintenance sweep, not a user-facing announce job.
     delivery: {
@@ -333,7 +343,8 @@ function buildManagedDreamingPatch(
     payloadKind !== normalizeLowercaseStringOrEmpty(desired.payload.kind) ||
     !compareOptionalStrings(payloadToken, desiredPayloadToken) ||
     (desired.payload.kind === "agentTurn" &&
-      job.payload?.lightContext !== desired.payload.lightContext);
+      (job.payload?.lightContext !== desired.payload.lightContext ||
+        job.payload?.timeoutSeconds !== desired.payload.timeoutSeconds));
   if (payloadNeedsUpdate) {
     patch.payload = desired.payload;
   }
@@ -614,6 +625,22 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
     return { handled: true, reason: "memory-core: short-term dreaming disabled by limit" };
   }
 
+  const storedWorkspaceCursor = await readDreamingSweepCursor();
+  const workspaceBatch = selectDreamingWorkspaceBatch({
+    workspaces,
+    nextWorkspaceKey: storedWorkspaceCursor,
+    limit: DREAMING_MAX_WORKSPACES_PER_RUN,
+  });
+  const leaseGuard = await acquireDreamingSweepLeaseGuard({
+    onRenewalFailure: (error) =>
+      params.logger.error(`memory-core: dreaming sweep lease renewal failed: ${error.message}`),
+  });
+  if (!leaseGuard) {
+    params.logger.warn("memory-core: dreaming sweep skipped because another sweep is active.");
+    return { handled: true, reason: "memory-core: short-term dreaming already active" };
+  }
+  await using sweepLease = leaseGuard;
+
   if (params.config.verboseLogging) {
     params.logger.info(
       `memory-core: dreaming verbose enabled (cron=${params.config.cron}, limit=${params.config.limit}, minScore=${params.config.minScore.toFixed(3)}, minRecallCount=${params.config.minRecallCount}, minUniqueQueries=${params.config.minUniqueQueries}, recencyHalfLifeDays=${recencyHalfLifeDays}, maxAgeDays=${params.config.maxAgeDays ?? "none"}, workspaces=${workspaces.length}).`,
@@ -625,11 +652,26 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
   let failedWorkspaces = 0;
   let degradedNarratives = 0;
   let pendingNarratives = 0;
+  let completedWorkspaces = 0;
+  let checkpointFailures = 0;
+  let checkpointCursor = storedWorkspaceCursor;
+  const checkpointWorkspace = async (workspaceDir: string, nextWorkspaceKey: string) => {
+    completedWorkspaces += 1;
+    try {
+      await checkpointDreamingSweep(nextWorkspaceKey);
+      checkpointCursor = nextWorkspaceKey;
+    } catch (error) {
+      checkpointFailures += 1;
+      params.logger.error(
+        `memory-core: dreaming cursor checkpoint failed after workspace ${workspaceDir}: ${formatErrorMessage(error)}`,
+      );
+    }
+  };
   const pluginConfig = params.cfg ? resolveMemoryDreamingPluginConfig(params.cfg) : undefined;
   const detachNarratives = params.trigger === "cron";
   const [
     { writeDeepDreamingReport },
-    { appendFallbackNarrativeEntry, runDreamNarrative },
+    { appendFallbackNarrativeEntry, drainDetachedDreamNarrativeJobs, runDreamNarrative },
     { runDreamingSweepPhases },
     {
       applyShortTermPromotions,
@@ -642,7 +684,13 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
     import("./dreaming-phases.js"),
     import("./short-term-promotion.js"),
   ]);
-  for (const { agentId, workspaceDir } of workspaces) {
+  for (const { agentId, workspaceDir, nextWorkspaceKey } of workspaceBatch) {
+    if (sweepLease.lost) {
+      params.logger.error(
+        `memory-core: dreaming sweep stopped after losing its singleton lease (done=${completedWorkspaces}, remaining=${workspaces.length - completedWorkspaces}).`,
+      );
+      break;
+    }
     const sweepNowMs = Date.now();
     try {
       const phaseResult = await runDreamingSweepPhases({
@@ -662,6 +710,7 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
       params.logger.error(
         `memory-core: dreaming sweep failed for workspace ${workspaceDir}: ${formatErrorMessage(err)}`,
       );
+      await checkpointWorkspace(workspaceDir, nextWorkspaceKey);
       continue;
     }
 
@@ -782,20 +831,35 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
       params.logger.error(
         `memory-core: dreaming promotion failed for workspace ${workspaceDir}: ${error}`,
       );
-      await appendFailedDreamingEvent({
-        workspaceDir,
-        phase: "deep",
-        error,
-        storageMode: params.config.storage?.mode ?? "separate",
-        nowMs: sweepNowMs,
-        logger: params.logger,
-      });
+      try {
+        await appendFailedDreamingEvent({
+          workspaceDir,
+          phase: "deep",
+          error,
+          storageMode: params.config.storage?.mode ?? "separate",
+          nowMs: sweepNowMs,
+          logger: params.logger,
+        });
+      } catch (reportError) {
+        params.logger.error(
+          `memory-core: failed to record dreaming failure for workspace ${workspaceDir}: ${formatErrorMessage(reportError)}`,
+        );
+      }
     }
+    await checkpointWorkspace(workspaceDir, nextWorkspaceKey);
+  }
+  if (detachNarratives && pendingNarratives > 0) {
+    await drainDetachedDreamNarrativeJobs();
+    pendingNarratives = 0;
   }
   // A summary that reads identically whether the sweep worked or failed everywhere is how
   // a broken pipeline stays unnoticed; escalate when no workspace produced anything.
-  const summary = `memory-core: dreaming promotion complete (workspaces=${workspaces.length}, candidates=${totalCandidates}, applied=${totalApplied}, failed=${failedWorkspaces}, degraded=${degradedNarratives}, narrativesPending=${pendingNarratives}).`;
-  if (failedWorkspaces === workspaces.length || degradedNarratives > 0) {
+  const remainingWorkspaces = Math.max(0, workspaces.length - completedWorkspaces);
+  const cursorSummary = checkpointCursor?.slice(0, 12) ?? "none";
+  const summary = `memory-core: dreaming promotion checkpoint (done=${completedWorkspaces}, selected=${workspaceBatch.length}, remaining=${remainingWorkspaces}, total=${workspaces.length}, nextCursor=${cursorSummary}, candidates=${totalCandidates}, applied=${totalApplied}, failed=${failedWorkspaces}, degraded=${degradedNarratives}, narrativesPending=${pendingNarratives}, checkpointErrors=${checkpointFailures}).`;
+  const sweepDegraded =
+    failedWorkspaces > 0 || degradedNarratives > 0 || checkpointFailures > 0 || sweepLease.lost;
+  if (sweepDegraded) {
     params.logger.warn(summary);
   } else {
     params.logger.info(summary);
@@ -803,9 +867,10 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
 
   return {
     handled: true,
-    reason:
-      degradedNarratives > 0
-        ? "memory-core: short-term dreaming degraded"
+    reason: sweepDegraded
+      ? "memory-core: short-term dreaming degraded"
+      : remainingWorkspaces > 0
+        ? "memory-core: short-term dreaming batch checkpointed"
         : "memory-core: short-term dreaming processed",
   };
 }
