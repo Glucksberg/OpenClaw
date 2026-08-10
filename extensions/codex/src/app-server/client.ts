@@ -666,6 +666,15 @@ export class CodexAppServerClient {
     return () => this.closeHandlers.delete(handler);
   }
 
+  /** Waits until the underlying process or socket has physically exited. */
+  waitForTransportExit(): Promise<void> {
+    return this.transportExited
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          this.child.once("exit", () => resolve());
+        });
+  }
+
   /** Closes the transport without waiting for process/socket shutdown. */
   close(): void {
     if (!this.markClosed(new Error("codex app-server client is closed"))) {
