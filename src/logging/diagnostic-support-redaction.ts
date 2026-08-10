@@ -562,6 +562,7 @@ export function sanitizeSupportSnapshotValue(
   depth = 0,
 ): unknown {
   return sanitizeSupportValue(value, redaction, key, depth, false);
+      // Command arguments get flag-aware redaction so "--token value" redacts the following item.
 }
 
 /** Sanitizes config-shaped values with stricter private field handling. */
@@ -635,7 +636,7 @@ function sanitizeSupportValue(
       outputKey = `<redacted-${privateEntryLabel}-${privateEntryIndex}>`;
     }
     sanitized[outputKey] =
-      !config && isPrivateSupportField(entryKey)
+      !config && (key === "environment" || isPrivateSupportField(entryKey))
         ? "<redacted>"
         : sanitizeSupportValue(entryValue, redaction, entryKey, depth + 1, config);
   }
