@@ -209,6 +209,38 @@ describe("runDreamNarrative", () => {
       }
     },
   );
+
+  it("serializes in-flight detached narratives", async () => {
+    const firstWorkspace = await createTempWorkspace("dreaming-detached-first-");
+    const secondWorkspace = await createTempWorkspace("dreaming-detached-second-");
+    const first = createDeferred<{ text: string }>();
+    const second = createDeferred<{ text: string }>();
+    const subagent = createCompletion();
+    subagent.complete.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+
+    await runDreamNarrative({
+      agentId: "main",
+      subagent,
+      workspaceDir: firstWorkspace,
+      data: { phase: "light", snippets: ["First detached fragment."] },
+      logger: createLogger(),
+      detached: true,
+    });
+    await runDreamNarrative({
+      agentId: "main",
+      subagent,
+      workspaceDir: secondWorkspace,
+      data: { phase: "rem", snippets: ["Second detached fragment."] },
+      logger: createLogger(),
+      detached: true,
+    });
+
+    await vi.waitFor(() => expect(subagent.complete).toHaveBeenCalledTimes(1));
+    first.resolve({ text: "The first memory found its page." });
+    await vi.waitFor(() => expect(subagent.complete).toHaveBeenCalledTimes(2));
+    second.resolve({ text: "The second memory found its page." });
+    await drainDetachedDreamNarrativeJobs();
+  });
 });
 
 describe("runDreamNarrative deletion boundary", () => {

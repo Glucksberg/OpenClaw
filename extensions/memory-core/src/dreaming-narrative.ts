@@ -320,8 +320,8 @@ async function generateAndAppendDreamNarrative(
 }
 
 // Cron-driven dreaming detaches narrative generation across phases and workspaces.
-// Bound the shared work and retain each promise so the owning sweep can drain it.
-const DETACHED_NARRATIVE_CONCURRENCY = 3;
+// Serialize the shared work and retain each promise so the owning sweep can drain it.
+const DETACHED_NARRATIVE_CONCURRENCY = 1;
 const detachedNarrativeLimit = pLimit(DETACHED_NARRATIVE_CONCURRENCY);
 const detachedNarrativeJobs = new Set<Promise<void>>();
 
