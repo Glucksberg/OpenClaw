@@ -3,8 +3,10 @@ import { configureMemoryCoreDreamingState, memoryCoreWorkspaceStateKey } from ".
 import {
   acquireDreamingSweepLease,
   acquireDreamingSweepLeaseGuard,
+  advanceDreamingSweepProgress,
   checkpointDreamingSweep,
   readDreamingSweepCursor,
+  readDreamingSweepProgress,
   releaseDreamingSweepLease,
   renewDreamingSweepLease,
   selectDreamingWorkspaceBatch,
@@ -81,23 +83,58 @@ describe("dreaming sweep budget", () => {
     await expect(acquireDreamingSweepLease()).resolves.toBeTruthy();
   });
 
-  test("resumes at the workspace after a failed item was checkpointed", async () => {
+  test("advances one phase at a time and preserves the failed phase until success", async () => {
     const store = createStore();
     configureMemoryCoreDreamingState(() => store as never);
     const workspaces = ["/one", "/two", "/three"].map((workspaceDir) => ({ workspaceDir }));
-    const firstBatch = selectDreamingWorkspaceBatch({ workspaces, limit: 2 });
+    const selected = selectDreamingWorkspaceBatch({ workspaces, limit: 1 })[0];
+    expect(selected).toBeDefined();
+    if (!selected) {
+      return;
+    }
 
-    // A failed workspace is an attempted item: checkpointing its successor prevents one bad
-    // workspace from starving the rest of the roster forever.
-    await checkpointDreamingSweep(firstBatch[0].nextWorkspaceKey);
-    const nextCursor = await readDreamingSweepCursor();
-    const resumed = selectDreamingWorkspaceBatch({
-      workspaces,
-      nextWorkspaceKey: nextCursor,
-      limit: 1,
+    // A failed run does not checkpoint, so its default light phase remains selected.
+    await expect(readDreamingSweepProgress()).resolves.toEqual({ nextPhase: "light" });
+
+    const afterLight = advanceDreamingSweepProgress({
+      phase: "light",
+      workspaceKey: selected.workspaceKey,
+      nextWorkspaceKey: selected.nextWorkspaceKey,
+    });
+    await checkpointDreamingSweep(afterLight.nextWorkspaceKey, afterLight.nextPhase);
+    await expect(readDreamingSweepProgress()).resolves.toEqual({
+      nextWorkspaceKey: selected.workspaceKey,
+      nextPhase: "rem",
     });
 
-    expect(resumed[0].workspaceKey).toBe(firstBatch[1].workspaceKey);
+    const afterRem = advanceDreamingSweepProgress({
+      phase: "rem",
+      workspaceKey: selected.workspaceKey,
+      nextWorkspaceKey: selected.nextWorkspaceKey,
+    });
+    expect(afterRem).toEqual({ nextWorkspaceKey: selected.workspaceKey, nextPhase: "deep" });
+
+    const afterDeep = advanceDreamingSweepProgress({
+      phase: "deep",
+      workspaceKey: selected.workspaceKey,
+      nextWorkspaceKey: selected.nextWorkspaceKey,
+      nextDeepGroupKey: "project-two",
+    });
+    expect(afterDeep).toEqual({
+      nextWorkspaceKey: selected.workspaceKey,
+      nextPhase: "deep",
+      deepGroupKey: "project-two",
+    });
+
+    const afterLastDeepGroup = advanceDreamingSweepProgress({
+      phase: "deep",
+      workspaceKey: selected.workspaceKey,
+      nextWorkspaceKey: selected.nextWorkspaceKey,
+    });
+    expect(afterLastDeepGroup).toEqual({
+      nextWorkspaceKey: selected.nextWorkspaceKey,
+      nextPhase: "light",
+    });
   });
 
   test("marks a renewable guard lost when atomic ownership disappears", async () => {

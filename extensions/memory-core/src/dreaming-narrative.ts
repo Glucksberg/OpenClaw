@@ -1013,7 +1013,7 @@ async function generateAndAppendDreamNarrative(
 //
 // `runDetachedNarrativeJob` caps total in-flight detached narratives across
 // phases/workspaces so cron sweeps cannot exhaust model and session-lock slots.
-const DETACHED_NARRATIVE_CONCURRENCY = 3;
+const DETACHED_NARRATIVE_CONCURRENCY = 1;
 const detachedNarrativeLimit = pLimit(DETACHED_NARRATIVE_CONCURRENCY);
 const detachedNarrativeJobs = new Set<Promise<void>>();
 

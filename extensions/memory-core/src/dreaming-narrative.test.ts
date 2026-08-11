@@ -1293,7 +1293,7 @@ describe("runDreamNarrative detached dispatch", () => {
     }
   }
 
-  it("caps the number of in-flight detached narratives at 3", async () => {
+  it("caps the number of in-flight detached narratives at 1", async () => {
     const { subagent, runDeferreds } = createBlockingSubagent();
     const workspaceDirs = await Promise.all(
       Array.from({ length: 5 }, () => createTempWorkspace("openclaw-dreaming-detach-")),
@@ -1314,8 +1314,8 @@ describe("runDreamNarrative detached dispatch", () => {
 
     await drainMicrotasks();
 
-    // Only the first 3 should have reached subagent.run; the rest are queued.
-    expect(subagent.run).toHaveBeenCalledTimes(3);
+    // Only the first narrative should have reached subagent.run; the rest are queued.
+    expect(subagent.run).toHaveBeenCalledTimes(1);
 
     // Drain the rest so module-level concurrency state does not leak into
     // subsequent tests. The mock subagent creates a new deferred every time

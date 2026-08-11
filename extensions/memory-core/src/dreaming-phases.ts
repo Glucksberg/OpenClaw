@@ -39,6 +39,7 @@ import {
   readMemoryCoreWorkspaceEntries,
   writeMemoryCoreWorkspaceEntries,
 } from "./dreaming-state.js";
+import type { DreamingPhase } from "./dreaming-sweep-budget.js";
 import { textSimilarity as snippetSimilarity } from "./memory/tokenize.js";
 import {
   appendSessionCorpusLines,
@@ -1491,6 +1492,83 @@ type DreamingSweepPhaseResult = {
   degradedPhases: number;
   pendingNarratives: number;
 };
+
+export type SingleDreamingPhaseResult = {
+  phase: Exclude<DreamingPhase, "deep">;
+  dispatched: 0 | 1;
+  terminal: "completed" | "skipped" | "degraded";
+  error?: string;
+};
+
+function toSingleDreamingPhaseResult(
+  phase: SingleDreamingPhaseResult["phase"],
+  outcome: DreamNarrativeOutcome,
+): SingleDreamingPhaseResult {
+  if (outcome.status === "degraded") {
+    return { phase, dispatched: 1, terminal: "degraded", error: outcome.error };
+  }
+  return {
+    phase,
+    dispatched: outcome.status === "skipped" ? 0 : 1,
+    terminal: outcome.status === "pending" ? "degraded" : outcome.status,
+    ...(outcome.status === "pending" ? { error: "narrative did not settle inline" } : {}),
+  };
+}
+
+export async function runDreamingSweepPhase(params: {
+  phase: Exclude<DreamingPhase, "deep">;
+  agentId?: string;
+  workspaceDir: string;
+  pluginConfig?: Record<string, unknown>;
+  cfg?: DreamingHostConfig;
+  logger: Logger;
+  subagent?: DreamNarrativeRequest["subagent"];
+  nowMs?: number;
+}): Promise<SingleDreamingPhaseResult> {
+  const sweepNowMs: number = Number.isFinite(params.nowMs) ? (params.nowMs as number) : Date.now();
+  if (params.phase === "light") {
+    const light = resolveMemoryLightDreamingConfig({
+      pluginConfig: params.pluginConfig,
+      cfg: params.cfg as Parameters<typeof resolveMemoryLightDreamingConfig>[0]["cfg"],
+    });
+    if (!light.enabled || light.limit <= 0) {
+      return { phase: "light", dispatched: 0, terminal: "skipped" };
+    }
+    return toSingleDreamingPhaseResult(
+      "light",
+      await runLightDreaming({
+        agentId: params.agentId,
+        workspaceDir: params.workspaceDir,
+        cfg: params.cfg,
+        config: light,
+        logger: params.logger,
+        subagent: params.subagent,
+        nowMs: sweepNowMs,
+        detachNarratives: false,
+      }),
+    );
+  }
+  const rem = resolveMemoryRemDreamingConfig({
+    pluginConfig: params.pluginConfig,
+    cfg: params.cfg as Parameters<typeof resolveMemoryRemDreamingConfig>[0]["cfg"],
+  });
+  if (!rem.enabled || rem.limit <= 0) {
+    return { phase: "rem", dispatched: 0, terminal: "skipped" };
+  }
+  return toSingleDreamingPhaseResult(
+    "rem",
+    await runRemDreaming({
+      agentId: params.agentId,
+      workspaceDir: params.workspaceDir,
+      cfg: params.cfg,
+      config: rem,
+      logger: params.logger,
+      subagent: params.subagent,
+      nowMs: sweepNowMs,
+      detachNarratives: false,
+    }),
+  );
+}
 
 export async function runDreamingSweepPhases(params: {
   /**

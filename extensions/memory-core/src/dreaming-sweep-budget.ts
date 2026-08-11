@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-runtime";
 import { memoryCoreWorkspaceStateKey, openMemoryCoreStateStore } from "./dreaming-state.js";
 
-export const DREAMING_MAX_WORKSPACES_PER_RUN = 2;
+export const DREAMING_MAX_WORKSPACES_PER_RUN = 1;
+export const DREAMING_PHASES = ["light", "rem", "deep"] as const;
+export type DreamingPhase = (typeof DREAMING_PHASES)[number];
 const DREAMING_SWEEP_STATE_NAMESPACE = "dreaming-sweep-budget";
 const DREAMING_SWEEP_CURSOR_KEY = "cursor";
 const DREAMING_SWEEP_LEASE_KEY = "lease";
@@ -12,8 +14,20 @@ export const DREAMING_SWEEP_LEASE_RENEW_MS = 60_000;
 type DreamingWorkspace = { agentId?: string; workspaceDir: string };
 
 type DreamingSweepState =
-  | { kind: "cursor"; nextWorkspaceKey: string; updatedAtMs: number }
+  | {
+      kind: "cursor";
+      nextWorkspaceKey: string;
+      nextPhase?: DreamingPhase;
+      deepGroupKey?: string;
+      updatedAtMs: number;
+    }
   | { kind: "lease"; token: string; startedAtMs: number };
+
+export type DreamingSweepProgress = {
+  nextWorkspaceKey?: string;
+  nextPhase: DreamingPhase;
+  deepGroupKey?: string;
+};
 
 export type DreamingWorkspaceBatchItem = DreamingWorkspace & {
   workspaceKey: string;
@@ -69,12 +83,54 @@ export async function readDreamingSweepCursor(): Promise<string | undefined> {
   return state?.kind === "cursor" ? state.nextWorkspaceKey : undefined;
 }
 
-export async function checkpointDreamingSweep(nextWorkspaceKey: string): Promise<void> {
+export async function readDreamingSweepProgress(): Promise<DreamingSweepProgress> {
+  const state = await openDreamingSweepStore().lookup(DREAMING_SWEEP_CURSOR_KEY);
+  if (state?.kind !== "cursor") {
+    return { nextPhase: "light" };
+  }
+  return {
+    nextWorkspaceKey: state.nextWorkspaceKey,
+    nextPhase: DREAMING_PHASES.includes(state.nextPhase ?? "light")
+      ? (state.nextPhase ?? "light")
+      : "light",
+    ...(state.deepGroupKey ? { deepGroupKey: state.deepGroupKey } : {}),
+  };
+}
+
+export async function checkpointDreamingSweep(
+  nextWorkspaceKey: string,
+  nextPhase: DreamingPhase = "light",
+  deepGroupKey?: string,
+): Promise<void> {
   await openDreamingSweepStore().register(DREAMING_SWEEP_CURSOR_KEY, {
     kind: "cursor",
     nextWorkspaceKey,
+    nextPhase,
+    ...(deepGroupKey ? { deepGroupKey } : {}),
     updatedAtMs: Date.now(),
   });
+}
+
+export function advanceDreamingSweepProgress(params: {
+  phase: DreamingPhase;
+  workspaceKey: string;
+  nextWorkspaceKey: string;
+  nextDeepGroupKey?: string;
+}): DreamingSweepProgress & { nextWorkspaceKey: string } {
+  if (params.phase === "light") {
+    return { nextWorkspaceKey: params.workspaceKey, nextPhase: "rem" };
+  }
+  if (params.phase === "rem") {
+    return { nextWorkspaceKey: params.workspaceKey, nextPhase: "deep" };
+  }
+  if (params.nextDeepGroupKey) {
+    return {
+      nextWorkspaceKey: params.workspaceKey,
+      nextPhase: "deep",
+      deepGroupKey: params.nextDeepGroupKey,
+    };
+  }
+  return { nextWorkspaceKey: params.nextWorkspaceKey, nextPhase: "light" };
 }
 
 export async function acquireDreamingSweepLease(): Promise<string | undefined> {
