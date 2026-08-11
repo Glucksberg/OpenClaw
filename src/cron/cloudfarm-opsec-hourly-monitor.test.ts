@@ -48,7 +48,9 @@ describe("cloudfarm opsec hourly monitor definition", () => {
       call.mock.calls.every(
         ([, params]) =>
           params.workdir === "/home/dev/projects/CloudFarm" &&
-          params.env?.CLOUDFARM_ROOT === "/home/dev/projects/CloudFarm",
+          params.env?.CLOUDFARM_ROOT === "/home/dev/projects/CloudFarm" &&
+          typeof params.timeoutSeconds === "number" &&
+          !("timeout" in params),
       ),
     ).toBe(true);
     expect(output.notify).toBeUndefined();
