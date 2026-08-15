@@ -1,24 +1,23 @@
-import { killSubagentRunAdmin } from "../agents/subagents/registry/subagent-control.js";
+import { isSameSubagentRunGeneration } from "../agents/subagents/registry/subagent-control-scope.js";
 import {
+  killAllControlledSubagentRuns,
+  resolveSubagentController,
+} from "../agents/subagents/registry/subagent-control.js";
+import {
+  getLatestLiveSubagentRunByChildSessionKey,
   isSubagentSessionRunActive,
   listSubagentRunsForController,
 } from "../agents/subagents/registry/subagent-registry-read.js";
 import type { SubagentRunRecord } from "../agents/subagents/registry/subagent-registry.types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 
-export type CronTimeoutSubagentCleanupDeps = {
+type CronTimeoutSubagentCleanupDeps = {
   listRuns: (controllerSessionKey: string) => SubagentRunRecord[];
-  isActive: (childSessionKey: string) => boolean;
-  kill: typeof killSubagentRunAdmin;
+  isActive: (entry: SubagentRunRecord) => boolean;
+  kill: (runs: SubagentRunRecord[]) => Promise<{ killed: number; error?: string }>;
 };
 
-const defaultDeps: CronTimeoutSubagentCleanupDeps = {
-  listRuns: listSubagentRunsForController,
-  isActive: isSubagentSessionRunActive,
-  kill: killSubagentRunAdmin,
-};
-
-export type CronTimeoutSubagentCleanupResult = {
+type CronTimeoutSubagentCleanupResult = {
   requested: number;
   killed: number;
   remaining: string[];
@@ -26,41 +25,76 @@ export type CronTimeoutSubagentCleanupResult = {
   drained: boolean;
 };
 
-/** Cancels direct child runs of a timed-out cron session; each admin kill cascades descendants. */
+function subagentRunGenerationKey(entry: SubagentRunRecord): string {
+  return `${entry.childSessionKey}\0${entry.runId}\0${entry.generation ?? ""}\0${entry.createdAt}`;
+}
+
+/** Cancels exact direct-child generations of a timed-out cron session and their descendants. */
 export async function cancelTimedOutCronSubagents(params: {
   cfg: OpenClawConfig;
   controllerSessionKey: string;
   deps?: CronTimeoutSubagentCleanupDeps;
 }): Promise<CronTimeoutSubagentCleanupResult> {
-  const deps = params.deps ?? defaultDeps;
-  const childSessionKeys = [
+  const controller = resolveSubagentController({
+    cfg: params.cfg,
+    agentSessionKey: params.controllerSessionKey,
+  });
+  const deps: CronTimeoutSubagentCleanupDeps =
+    params.deps ??
+    ({
+      listRuns: listSubagentRunsForController,
+      isActive: (entry) => {
+        const latest = getLatestLiveSubagentRunByChildSessionKey(entry.childSessionKey);
+        return (
+          isSubagentSessionRunActive(entry.childSessionKey) &&
+          latest !== null &&
+          isSameSubagentRunGeneration(latest, entry)
+        );
+      },
+      kill: async (runs) => {
+        const result = await killAllControlledSubagentRuns({
+          cfg: params.cfg,
+          controller,
+          runs,
+          suppressTaskDelivery: true,
+        });
+        return {
+          killed: result.killed,
+          ...(result.status !== "ok" ? { error: result.error } : {}),
+        };
+      },
+    } satisfies CronTimeoutSubagentCleanupDeps);
+
+  const activeRunsByGeneration = new Map<string, SubagentRunRecord>();
+  for (const entry of deps.listRuns(params.controllerSessionKey)) {
+    if (deps.isActive(entry)) {
+      activeRunsByGeneration.set(subagentRunGenerationKey(entry), entry);
+    }
+  }
+  const activeRuns = [...activeRunsByGeneration.values()];
+  let killed = 0;
+  const errors: string[] = [];
+  if (activeRuns.length > 0) {
+    try {
+      const result = await deps.kill(activeRuns);
+      killed += result.killed;
+      if (result.error) {
+        errors.push(result.error);
+      }
+    } catch (error) {
+      errors.push(String(error));
+    }
+  }
+  const remaining = [
     ...new Set(
       deps
         .listRuns(params.controllerSessionKey)
-        .map((entry) => entry.childSessionKey)
-        .filter((sessionKey) => deps.isActive(sessionKey)),
+        .filter((entry) => deps.isActive(entry))
+        .map((entry) => entry.childSessionKey),
     ),
   ];
-  const results = await Promise.allSettled(
-    childSessionKeys.map((sessionKey) => deps.kill({ cfg: params.cfg, sessionKey })),
-  );
-  let killed = 0;
-  const errors: string[] = [];
-  for (const result of results) {
-    if (result.status === "rejected") {
-      errors.push(String(result.reason));
-      continue;
-    }
-    if (result.value.killed) {
-      killed += 1;
-    }
-    if ("error" in result.value && result.value.error) {
-      errors.push(String(result.value.error));
-    }
-  }
-  const remaining = childSessionKeys.filter((sessionKey) => deps.isActive(sessionKey));
   return {
-    requested: childSessionKeys.length,
+    requested: activeRuns.length,
     killed,
     remaining,
     errors,
