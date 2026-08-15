@@ -80,6 +80,16 @@ function lastAgentTurnRequest(): {
   return { client: options.client, params };
 }
 
+function lastGatewayRequest(): HandleGatewayRequestOptions {
+  const options = handleGatewayRequest.mock.calls.at(-1)?.[0] as
+    | HandleGatewayRequestOptions
+    | undefined;
+  if (!options) {
+    throw new Error("expected gateway request");
+  }
+  return options;
+}
+
 beforeEach(() => {
   internalAgentTurnFacade.create.mockReset();
   internalAgentTurnFacade.dispatch.mockReset().mockResolvedValue({ runId: "plugin-run-1" });
