@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Gateway plugin runtime methods share request scope and lifecycle state. */
 // Gateway plugin runtime adapter.
 // Loads plugin registries and builds fallback request context for non-WS paths.
 import { randomUUID } from "node:crypto";
