@@ -86,6 +86,7 @@ import {
   type CronStreamFireDisposition,
   resolveStreamStopReason,
 } from "./cron-stream-watchers.js";
+import { cancelTimedOutCronSubagents } from "./cron-timeout-subagent-cleanup.js";
 import {
   fenceScheduledGatewayContextResolver,
   runWithScheduledGatewayContext,
@@ -957,16 +958,25 @@ export function buildGatewayCronService(params: {
       return { ...base, ...completion };
     },
     cleanupTimedOutAgentRun: async ({ job, execution }) => {
-      if (!execution?.sessionId) {
+      if (!execution?.sessionId && !execution?.sessionKey) {
         return;
       }
-      const result = await abortAndDrainEmbeddedAgentRun({
-        sessionId: execution.sessionId,
-        sessionKey: execution.sessionKey,
-        settleMs: 15_000,
-        forceClear: true,
-        reason: "cron_timeout",
-      });
+      const parentCleanup = execution.sessionId
+        ? abortAndDrainEmbeddedAgentRun({
+            sessionId: execution.sessionId,
+            sessionKey: execution.sessionKey,
+            settleMs: 15_000,
+            forceClear: true,
+            reason: "cron_timeout",
+          })
+        : Promise.resolve({ aborted: false, drained: true, forceCleared: false });
+      const descendantCleanup = execution.sessionKey
+        ? cancelTimedOutCronSubagents({
+            cfg: getRuntimeConfig(),
+            controllerSessionKey: execution.sessionKey,
+          })
+        : Promise.resolve({ requested: 0, killed: 0, remaining: [], errors: [], drained: true });
+      const [result, descendants] = await Promise.all([parentCleanup, descendantCleanup]);
       cronLogger.warn(
         {
           jobId: job.id,
@@ -975,19 +985,26 @@ export function buildGatewayCronService(params: {
           aborted: result.aborted,
           drained: result.drained,
           forceCleared: result.forceCleared,
+          descendantKillRequested: descendants.requested,
+          descendantKilled: descendants.killed,
+          descendantDrained: descendants.drained,
+          descendantRemaining: descendants.remaining,
+          descendantErrors: descendants.errors,
         },
         "cron: cleaned up timed-out agent run",
       );
-      await retireSessionMcpRuntime({
-        sessionId: execution.sessionId,
-        reason: "cron-timeout-cleanup",
-        onError: (error, sid) => {
-          cronLogger.warn(
-            { jobId: job.id, sessionId: sid },
-            `cron: failed to retire MCP runtime for timed-out session: ${String(error)}`,
-          );
-        },
-      }).catch(() => {});
+      if (execution.sessionId) {
+        await retireSessionMcpRuntime({
+          sessionId: execution.sessionId,
+          reason: "cron-timeout-cleanup",
+          onError: (error, sid) => {
+            cronLogger.warn(
+              { jobId: job.id, sessionId: sid },
+              `cron: failed to retire MCP runtime for timed-out session: ${String(error)}`,
+            );
+          },
+        }).catch(() => {});
+      }
     },
     onIsolatedAgentSetupTimeout: ({ job, error, timeoutMs }) => {
       cronLogger.warn(

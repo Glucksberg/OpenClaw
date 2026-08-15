@@ -420,6 +420,7 @@ async function executeJobCoreWithTimeoutUnfinalized(
       const result: CronCoreRunOutcome = {
         status: "error",
         error,
+        executionStarted: activeExecution !== undefined,
         ...cronRunAttributionFromExecution(activeExecution),
         diagnostics: createCronRunDiagnosticsFromError("cron-setup", error, {
           nowMs: state.deps.nowMs,

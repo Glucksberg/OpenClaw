@@ -37,6 +37,8 @@ const RATE_LIMIT_PATTERN =
 const SESSION_LIFECYCLE_CLAIM_ERROR_PATTERN =
   /^(?:(?:CronSessionLifecycleClaimError|Error): )?Session "[^"\n]+" (?:changed|was deleted) while starting work\. Retry\.$/;
 
+const POST_EXECUTION_HARD_TIMEOUT_PATTERN = /^cron: job execution timed out\b/i;
+
 const TRANSIENT_PATTERNS: Record<CronRetryOn, RegExp> = {
   rate_limit: RATE_LIMIT_PATTERN,
   overloaded:
@@ -51,6 +53,11 @@ const TRANSIENT_PATTERNS: Record<CronRetryOn, RegExp> = {
 export function resolveCronExecutionRetryHint(input: CronRetryHintInput): CronRetryHint {
   const { error, retryOn, classifiedReason, executionStarted } = input;
   if (!error || typeof error !== "string") {
+    return { retryable: false };
+  }
+  // A scheduler-enforced timeout can return before the timed-out agent and its
+  // descendants finish draining. Retrying it can overlap non-idempotent work.
+  if (executionStarted === true && POST_EXECUTION_HARD_TIMEOUT_PATTERN.test(error)) {
     return { retryable: false };
   }
   if (SESSION_LIFECYCLE_CLAIM_ERROR_PATTERN.test(error)) {
