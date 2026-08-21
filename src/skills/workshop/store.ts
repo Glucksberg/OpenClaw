@@ -184,6 +184,19 @@ export class SkillProposalDraftMissingError extends Error {
   }
 }
 
+export class SkillProposalIntegrityError extends Error {
+  override name = "SkillProposalIntegrityError";
+
+  constructor(
+    message: string,
+    readonly record: SkillProposalRecord,
+    readonly revisionHash = hashSkillProposalRevision(record),
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
+
 export async function readSkillProposal(
   proposalId: string,
   options: SkillWorkshopStoreOptions = {},
@@ -486,16 +499,32 @@ async function readProposalSupportFiles(
   const out: PreparedSkillProposalSupportFile[] = [];
   for (const file of record.supportFiles ?? []) {
     const filePath = normalizeWorkspaceSkillSupportPath(file.path);
-    const read = await stateRoot.read(proposalBundleRelativePath(record, filePath), {
-      hardlinks: "reject",
-      maxBytes: MAX_WORKSPACE_SKILL_SUPPORT_FILE_BYTES,
-      symlinks: "reject",
-    });
+    let read: ReadResult;
+    try {
+      read = await stateRoot.read(proposalBundleRelativePath(record, filePath), {
+        hardlinks: "reject",
+        maxBytes: MAX_WORKSPACE_SKILL_SUPPORT_FILE_BYTES,
+        symlinks: "reject",
+      });
+    } catch (error) {
+      if (error instanceof FsSafeError && error.category === "policy") {
+        throw new SkillProposalIntegrityError(
+          `Proposal support file no longer matches metadata: ${filePath}`,
+          record,
+          undefined,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
     const content = read.buffer.toString("utf8");
     const sizeBytes = contentSizeBytes(content);
     const hash = hashSkillProposalContent(content);
     if (file.sizeBytes !== sizeBytes || file.hash !== hash) {
-      throw new Error(`Proposal support file changed without updating metadata: ${filePath}`);
+      throw new SkillProposalIntegrityError(
+        `Proposal support file changed without updating metadata: ${filePath}`,
+        record,
+      );
     }
     out.push({ path: filePath, sizeBytes, hash, content });
   }
@@ -519,13 +548,28 @@ async function readSkillProposalBundle(
     if (error instanceof FsSafeError && error.code === "not-found") {
       throw new SkillProposalDraftMissingError(record.id, { cause: error });
     }
+    if (error instanceof FsSafeError && error.category === "policy") {
+      throw new SkillProposalIntegrityError(
+        "Proposal draft no longer matches its stored record.",
+        record,
+        undefined,
+        { cause: error },
+      );
+    }
     throw error;
+  }
+  const content = draft.buffer.toString("utf8");
+  if (hashSkillProposalContent(content) !== record.draftHash) {
+    throw new SkillProposalIntegrityError(
+      "Proposal draft changed without updating metadata.",
+      record,
+    );
   }
   const supportFiles = await readProposalSupportFiles(record, stateRoot);
   return {
     record,
     revisionHash: hashSkillProposalRevision(record),
-    content: draft.buffer.toString("utf8"),
+    content,
     ...(supportFiles.length > 0 ? { supportFiles } : {}),
   };
 }

@@ -50,7 +50,11 @@ vi.mock("../runtime.js", () => ({
 
 vi.mock("../gateway/call.js", () => ({
   callGateway: vi.fn(async () => {
-    throw Object.assign(new Error("gateway unavailable"), { kind: "closed", code: 1006 });
+    throw Object.assign(new Error("gateway unavailable"), {
+      kind: "closed",
+      code: 1006,
+      connectionDetails: { urlSource: "local loopback" },
+    });
   }),
   isGatewayCredentialsRequiredError: () => false,
   isGatewayTransportError: () => true,
@@ -233,6 +237,34 @@ describe("skills workshop cli", () => {
     expect(mocks.runtimeStdout.at(-1)).toContain("status: proposal");
     expect(mocks.runtimeStdout.at(-1)).toContain("--- references/weather.md ---");
     expect(mocks.runtimeStdout.at(-1)).toContain("Use current conditions before recommendations.");
+
+    await runCommand(["skills", "workshop", "review", proposalId!, "--json"]);
+    const review = JSON.parse(mocks.runtimeStdout.at(-1) ?? "{}") as {
+      content: string;
+      mode: string;
+      revisionHash: string;
+      record: { proposedVersion: string };
+      supportFiles: Array<{ path: string; content: string }>;
+    };
+    expect(review).toMatchObject({
+      mode: "full",
+      supportFiles: [
+        {
+          path: "references/weather.md",
+          content: "Use current conditions before recommendations.\n",
+        },
+      ],
+    });
+    expect(review.content).toContain('name: "paris-weather"');
+    expect(review.content).toContain("Check current weather before advice.");
+    expect(review.content).not.toContain("status: proposal");
+
+    await runCommand(["skills", "--json", "workshop", "review", proposalId!]);
+    const inheritedReview = JSON.parse(mocks.runtimeStdout.at(-1) ?? "{}") as typeof review;
+    expect(inheritedReview.mode).toBe("full");
+
+    await runCommand(["skills", "workshop", "review", proposalId!]);
+    expect(mocks.runtimeStdout.at(-1)).toContain(`Proposal: ${proposalId}\nVersion: v1`);
 
     const revisedPath = path.join(mocks.workspaceDir, "revised-proposal.md");
     await fs.writeFile(

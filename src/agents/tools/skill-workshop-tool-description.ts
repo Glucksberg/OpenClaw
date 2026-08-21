@@ -22,9 +22,9 @@ export function buildSkillWorkshopToolDescription(params: {
         : params.autonomousMode === "propose"
           ? "A foreground patch to a skill used in this run stays pending for review."
           : "A foreground patch to a skill used in this run is scanned and applied immediately.";
-    return `${SKILL_WORKSHOP_TOOL_DISPLAY_SUMMARY} Read, patch, create, update, revise, inspect, evaluate, and apply reusable-procedure skill proposals. Restore the backup retained by the last collection cleanup when the user asks to undo it. ${repairPolicy}\n\n${SKILL_AUTHORING_STANDARDS_PROMPT}`;
+    return `${SKILL_WORKSHOP_TOOL_DISPLAY_SUMMARY} Read, patch, create, update, revise, inspect, review, evaluate, and apply reusable-procedure skill proposals. Restore the backup retained by the last collection cleanup when the user asks to undo it. ${repairPolicy}\n\n${SKILL_AUTHORING_STANDARDS_PROMPT}`;
   }
   const completion = params.supportsCompletion ? " complete = durably finish this review." : "";
   const draftKinds = params.updateProposals ? "create, update, or revise" : "create or revise";
-  return `${SKILL_WORKSHOP_TOOL_DISPLAY_SUMMARY} Inspect reusable-procedure skill proposals and draft pending ${draftKinds} proposals.${completion} Nothing writes a live skill directly; lifecycle actions are unavailable.\n\n${SKILL_AUTHORING_STANDARDS_PROMPT}`;
+  return `${SKILL_WORKSHOP_TOOL_DISPLAY_SUMMARY} Inspect or review reusable-procedure skill proposals and draft pending ${draftKinds} proposals.${completion} Nothing writes a live skill directly; lifecycle actions are unavailable.\n\n${SKILL_AUTHORING_STANDARDS_PROMPT}`;
 }

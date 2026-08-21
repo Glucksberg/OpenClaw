@@ -1,5 +1,7 @@
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   inspectSkillProposal,
+  reviewSkillProposal,
   resolvePendingSkillProposal,
 } from "../../skills/workshop/service.js";
 import { PROPOSAL_DRAFT_FILE } from "../../skills/workshop/store-record.js";
@@ -11,6 +13,7 @@ import type {
   SkillWorkshopProposalReviewCompletion,
 } from "../../skills/workshop/types.js";
 import { readPositiveIntegerParam, readToolStringParam, ToolInputError } from "./common.js";
+import { formatProposalReviewResult } from "./skill-workshop-tool-presentation.js";
 
 export function skillWorkshopAgentEventActor(agentId?: string) {
   return { type: "agent" as const, ...(agentId ? { id: agentId } : {}) };
@@ -142,13 +145,23 @@ export async function readProposalForInspect(
   env?: NodeJS.ProcessEnv,
   agentId?: string,
 ): Promise<SkillProposalReadResult> {
+  const proposalId = await resolveProposalIdForRead(params, workspaceDir, env, agentId);
+  const proposal = await inspectSkillProposal(proposalId, { agentId, workspaceDir, env });
+  if (!proposal) {
+    throw new ToolInputError(`Skill proposal not found: ${proposalId}`);
+  }
+  return proposal;
+}
+
+async function resolveProposalIdForRead(
+  params: Record<string, unknown>,
+  workspaceDir: string,
+  env?: NodeJS.ProcessEnv,
+  agentId?: string,
+): Promise<string> {
   const proposalId = readToolStringParam(params, "proposal_id", { label: "proposal_id" });
   if (proposalId) {
-    const proposal = await inspectSkillProposal(proposalId, { agentId, workspaceDir, env });
-    if (!proposal) {
-      throw new ToolInputError(`Skill proposal not found: ${proposalId}`);
-    }
-    return proposal;
+    return proposalId;
   }
   const resolved = await resolvePendingSkillProposal({
     name: readToolStringParam(params, "name", { required: true }),
@@ -156,15 +169,43 @@ export async function readProposalForInspect(
     env,
     agentId,
   });
-  const proposal = await inspectSkillProposal(resolved.record.id, {
-    agentId,
-    workspaceDir,
-    env,
-  });
-  if (!proposal) {
-    throw new ToolInputError(`Skill proposal not found: ${resolved.record.id}`);
+  return resolved.record.id;
+}
+
+function readReviewPageParam(params: Record<string, unknown>): number {
+  return readPositiveIntegerParam(params, "page") ?? 1;
+}
+
+export async function executeSkillWorkshopReview(
+  params: Record<string, unknown>,
+  options: {
+    workspaceDir: string;
+    config?: OpenClawConfig;
+    env?: NodeJS.ProcessEnv;
+    agentId?: string;
+  },
+) {
+  const page = readReviewPageParam(params);
+  const proposalId = readToolStringParam(params, "proposal_id", { label: "proposal_id" });
+  if (page > 1 && !proposalId) {
+    throw new ToolInputError("proposal_id required for review pages after page 1");
   }
-  return proposal;
+  const expectedRevisionHash = readToolStringParam(params, "expected_revision_hash");
+  if (page > 1 && !expectedRevisionHash) {
+    throw new ToolInputError("expected_revision_hash required for review pages after page 1");
+  }
+  const review = await reviewSkillProposal({
+    ...options,
+    proposalId:
+      proposalId ??
+      (await resolveProposalIdForRead(params, options.workspaceDir, options.env, options.agentId)),
+  });
+  if (expectedRevisionHash && expectedRevisionHash !== review.revisionHash) {
+    throw new ToolInputError(
+      `Skill proposal changed after review (expected ${expectedRevisionHash}, current ${review.revisionHash}). Restart at page 1.`,
+    );
+  }
+  return formatProposalReviewResult(review, page);
 }
 
 export function readProposalStatusParam(

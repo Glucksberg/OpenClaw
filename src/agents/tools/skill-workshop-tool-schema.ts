@@ -16,6 +16,7 @@ export const SKILL_WORKSHOP_ACTIONS = [
   "revise",
   "list",
   "inspect",
+  "review",
   "evaluate",
   "apply",
   "reject",
@@ -39,6 +40,7 @@ export function resolveProposalOnlyActions(updateProposals: boolean, supportsCom
     "revise",
     "list",
     "inspect",
+    "review",
     ...(supportsCompletion ? ["complete"] : []),
   ];
 }
@@ -65,16 +67,22 @@ export function buildSkillWorkshopToolSchema(
           description: proposalRevision
             ? "inspect = read the exact operator-reviewed proposal; revise = update only that proposal with the run-bound expected revision hash."
             : proposalOnly
-              ? `create = new skill;${updateProposals ? " patch = targeted find-and-replace on an existing live skill (quote the exact current text in old_string, replacement in new_string; empty old_string appends new_string at the end); read = complete existing live skill when it fits the selected-model budget, otherwise metadata without a partial body (required before patch or update); update = full-body rewrite of an existing live skill after reading it;" : ""} revise = existing pending proposal; list/inspect discover pending proposals (not filesystem search).${supportsCompletion ? " complete = durably finish this review after all proposal work." : ""} Nothing writes a live skill directly; lifecycle actions are unavailable.`
+              ? `create = new skill;${updateProposals ? " patch = targeted find-and-replace on an existing live skill (quote the exact current text in old_string, replacement in new_string; empty old_string appends new_string at the end); read = complete existing live skill when it fits the selected-model budget, otherwise metadata without a partial body (required before patch or update); update = full-body rewrite of an existing live skill after reading it;" : ""} revise = existing pending proposal; list/inspect/review discover, inspect, or preview pending proposals (not filesystem search).${supportsCompletion ? " complete = durably finish this review after all proposal work." : ""} Nothing writes a live skill directly; lifecycle actions are unavailable.`
               : collectionOnly
                 ? SKILL_COLLECTION_ACTION_DESCRIPTION
-                : "create = new skill; read = existing live skill; patch = targeted find-and-replace after reading; update = full-body rewrite; history = show up to 20 recent collection review outcomes and drop reasons; restore_collection = restore the collection backup retained by the last cleanup; revise = existing pending proposal; list/inspect discover pending proposals (not filesystem search); evaluate runs plugin evaluators for the exact draft; apply/reject/quarantine are explicit lifecycle actions.",
+                : "create = new skill; read = existing live skill; patch = targeted find-and-replace after reading; update = full-body rewrite; history = show up to 20 recent collection review outcomes and drop reasons; restore_collection = restore the collection backup retained by the last cleanup; revise = existing pending proposal; list/inspect discover pending proposals (not filesystem search); review = exact applied content for creates or a live unified diff for updates; evaluate runs plugin evaluators for the exact draft; apply/reject/quarantine are explicit lifecycle actions.",
         },
       ),
       proposal_id: Type.Optional(
         Type.String({
           description:
-            "Existing proposal id for action=inspect, action=revise, action=evaluate, action=apply, action=reject, or action=quarantine.",
+            "Existing proposal id for action=inspect, action=review, action=revise, action=evaluate, action=apply, action=reject, or action=quarantine. Required for review pages after page 1.",
+        }),
+      ),
+      page: Type.Optional(
+        Type.Integer({
+          minimum: 1,
+          description: "One-based output page for action=review. Defaults to 1.",
         }),
       ),
       artifact_path: Type.Optional(
@@ -158,7 +166,7 @@ export function buildSkillWorkshopToolSchema(
       expected_revision_hash: Type.Optional(
         Type.String({
           description:
-            "Optional exact proposal revision hash for revise/evaluate/apply/reject/quarantine. The action fails if content or support files changed.",
+            "Exact proposal revision hash returned by review/inspect. Required for later review pages and optional for revise/evaluate/apply/reject/quarantine; the action fails if content or support files changed.",
         }),
       ),
       correlation_id: Type.Optional(

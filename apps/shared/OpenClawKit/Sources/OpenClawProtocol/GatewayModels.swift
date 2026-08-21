@@ -16115,6 +16115,106 @@ public struct SkillsProposalEventsListResult: Codable, Sendable {
     }
 }
 
+public struct SkillsProposalReviewParams: Codable, Sendable {
+    public let agentid: String?
+    public let proposalid: String
+
+    public init(
+        agentid: String? = nil,
+        proposalid: String)
+    {
+        self.agentid = agentid
+        self.proposalid = proposalid
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agentid = "agentId"
+        case proposalid = "proposalId"
+    }
+}
+
+public struct SkillsProposalReviewFullResult: Codable, Sendable {
+    public let record: SkillsProposalRecordResult
+    public let revisionhash: String
+    public let mode: String
+    public let content: String
+    public let supportfiles: [[String: AnyCodable]]
+
+    public init(
+        record: SkillsProposalRecordResult,
+        revisionhash: String,
+        mode: String,
+        content: String,
+        supportfiles: [[String: AnyCodable]])
+    {
+        self.record = record
+        self.revisionhash = revisionhash
+        self.mode = mode
+        self.content = content
+        self.supportfiles = supportfiles
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case record
+        case revisionhash = "revisionHash"
+        case mode
+        case content
+        case supportfiles = "supportFiles"
+    }
+}
+
+public struct SkillsProposalReviewDiffResult: Codable, Sendable {
+    public let record: SkillsProposalRecordResult
+    public let revisionhash: String
+    public let mode: String
+    public let diff: String
+
+    public init(
+        record: SkillsProposalRecordResult,
+        revisionhash: String,
+        mode: String,
+        diff: String)
+    {
+        self.record = record
+        self.revisionhash = revisionhash
+        self.mode = mode
+        self.diff = diff
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case record
+        case revisionhash = "revisionHash"
+        case mode
+        case diff
+    }
+}
+
+public struct SkillsProposalReviewUnavailableResult: Codable, Sendable {
+    public let record: SkillsProposalRecordResult
+    public let revisionhash: String
+    public let mode: String
+    public let reason: AnyCodable
+
+    public init(
+        record: SkillsProposalRecordResult,
+        revisionhash: String,
+        mode: String,
+        reason: AnyCodable)
+    {
+        self.record = record
+        self.revisionhash = revisionhash
+        self.mode = mode
+        self.reason = reason
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case record
+        case revisionhash = "revisionHash"
+        case mode
+        case reason
+    }
+}
+
 public struct SkillsProposalHistoryStatusParams: Codable, Sendable {
     public let agentid: String?
 
@@ -21988,6 +22088,40 @@ public enum ToolsGitHubAuthorizePollResult: Codable, Sendable {
         case .networkError(let value): try value.encode(to: encoder)
         case .failed(let value): try value.encode(to: encoder)
         case .success(let value): try value.encode(to: encoder)
+        }
+    }
+}
+
+public enum SkillsProposalReviewResult: Codable, Sendable {
+    case full(SkillsProposalReviewFullResult)
+    case diff(SkillsProposalReviewDiffResult)
+    case unavailable(SkillsProposalReviewUnavailableResult)
+
+    private enum CodingKeys: String, CodingKey {
+        case discriminator = "mode"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let discriminator = try container.decode(String.self, forKey: .discriminator)
+        switch discriminator {
+        case "full": self = try .full(SkillsProposalReviewFullResult(from: decoder))
+        case "diff": self = try .diff(SkillsProposalReviewDiffResult(from: decoder))
+        case "unavailable": self = try .unavailable(SkillsProposalReviewUnavailableResult(from: decoder))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .discriminator,
+                in: container,
+                debugDescription: "Unknown SkillsProposalReviewResult discriminator value"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .full(let value): try value.encode(to: encoder)
+        case .diff(let value): try value.encode(to: encoder)
+        case .unavailable(let value): try value.encode(to: encoder)
         }
     }
 }
