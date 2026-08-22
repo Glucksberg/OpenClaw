@@ -213,6 +213,7 @@ describe("buildEmbeddedRunPayloads tool warnings", () => {
       lastToolError: {
         toolName: "exec",
         meta: "run python3 /path/to/daily-cost-audit.py (in /private/workspace)",
+        commandExcerpt: "python3 /private/workspace/daily-cost-audit.py --provider hidden",
         error: "Command exited with code 1",
         mutatingAction: true,
       },
@@ -224,6 +225,8 @@ describe("buildEmbeddedRunPayloads tool warnings", () => {
       text: "⚠️ 🛠️ Exec failed (exit 1)",
       isError: true,
     });
+    expect(payloads[0]?.text).not.toContain("/private/workspace");
+    expect(payloads[0]?.text).not.toContain("provider");
   });
 
   it("keeps full-verbose exec failure labels outside markdown command text", () => {
@@ -231,6 +234,7 @@ describe("buildEmbeddedRunPayloads tool warnings", () => {
       lastToolError: {
         toolName: "exec",
         meta: "run python3 /path/to/daily-cost-audit.py",
+        commandExcerpt: "python3 /redacted/daily-cost-audit.py --token [REDACTED]",
         error: "Command exited with code 1",
         mutatingAction: true,
       },
@@ -239,7 +243,7 @@ describe("buildEmbeddedRunPayloads tool warnings", () => {
     });
 
     expectSinglePayloadSummary(payloads, {
-      text: "⚠️ 🛠️ Exec failed: `python3 /path/to/daily-cost-audit.py`: Command exited with code 1",
+      text: "⚠️ 🛠️ Exec failed: `python3 /redacted/daily-cost-audit.py --token [REDACTED]`: Command exited with code 1",
       isError: true,
     });
     expect(payloads[0]?.text).not.toContain("`run python3");

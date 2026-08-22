@@ -50,7 +50,10 @@ function formatToolErrorWarningText(params: {
       markdown: params.useMarkdown,
     });
     const subject = params.includeDetails
-      ? formatExecLikeFailureSubject(params.lastToolError.meta, params.useMarkdown)
+      ? formatExecLikeFailureSubject(
+          params.lastToolError.commandExcerpt ?? params.lastToolError.meta,
+          params.useMarkdown,
+        )
       : "";
     const conciseExitSuffix = params.includeDetails
       ? ""
