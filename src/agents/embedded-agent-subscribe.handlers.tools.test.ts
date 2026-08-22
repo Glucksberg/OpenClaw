@@ -2521,6 +2521,104 @@ describe("handleToolExecutionEnd timeout metadata", () => {
     expect(payloads[0]?.text).toBe("⚠️ 🛠️ Exec failed (exit 1)");
   });
 
+  it("keeps cron exec warnings status-only unless full verbosity is requested", async () => {
+    const { ctx } = createTestContext();
+    const command =
+      "mkdir -p ~/.openclaw/workspace/.tmp && cd ~/.openclaw/workspace && jq . missing.json | sed 's/x/y/'";
+    await executeTool(ctx, {
+      toolName: "exec",
+      toolCallId: "tool-exec-cron-default-detail",
+      args: { command },
+      isError: true,
+      result: {
+        error: "Command exited with code 1",
+        content: [{ type: "text", text: "Command exited with code 1" }],
+        details: { status: "failed", exitCode: 1 },
+      },
+    });
+
+    expect(ctx.state.lastToolError?.meta).not.toContain(command);
+    expect(ctx.state.lastToolError?.commandExcerpt).toContain(`\`${command}\``);
+    const baseParams = {
+      assistantTexts: [] as string[],
+      lastAssistant: undefined,
+      lastToolError: ctx.state.lastToolError,
+      isCronTrigger: true,
+      sessionKey: "agent:main:cron:job-1:run:run-1",
+      toolResultFormat: "markdown" as const,
+    };
+    const payloads = buildEmbeddedRunPayloads(baseParams);
+    const fullPayloads = buildEmbeddedRunPayloads({ ...baseParams, verboseLevel: "full" });
+
+    expect(payloads[0]?.text).toBe("⚠️ 🛠️ Exec failed (exit 1)");
+    expect(payloads[0]?.text).not.toContain(command);
+    expect(fullPayloads[0]?.text).toBe(
+      `⚠️ 🛠️ Exec failed: \`${command}\`: Command exited with code 1`,
+    );
+  });
+
+  it("keeps workdir context with the command in full cron exec warnings", async () => {
+    const { ctx } = createTestContext();
+    const command = "pnpm test --filter cron";
+    await executeTool(ctx, {
+      toolName: "exec",
+      toolCallId: "tool-exec-cron-workdir-detail",
+      args: { command, workdir: "/tmp/ci-cron-checks" },
+      isError: true,
+      result: {
+        error: "Command exited with code 1",
+        content: [{ type: "text", text: "Command exited with code 1" }],
+        details: { status: "failed", exitCode: 1 },
+      },
+    });
+
+    expect(ctx.state.lastToolError?.commandExcerpt).toContain("(in /tmp/ci-cron-checks)");
+    const baseParams = {
+      assistantTexts: [] as string[],
+      lastAssistant: undefined,
+      lastToolError: ctx.state.lastToolError,
+      isCronTrigger: true,
+      sessionKey: "agent:main:cron:job-1:run:run-1",
+      toolResultFormat: "markdown" as const,
+    };
+    const payloads = buildEmbeddedRunPayloads(baseParams);
+    const fullPayloads = buildEmbeddedRunPayloads({ ...baseParams, verboseLevel: "full" });
+
+    expect(payloads[0]?.text).toBe("⚠️ 🛠️ Exec failed (exit 1)");
+    expect(fullPayloads[0]?.text).toContain(command);
+    expect(fullPayloads[0]?.text).toContain("(in /tmp/ci-cron-checks)");
+  });
+
+  it("keeps node context with the command in full cron exec warnings", async () => {
+    const { ctx } = createTestContext();
+    const command = "deploy.sh --stage prod";
+    await executeTool(ctx, {
+      toolName: "exec",
+      toolCallId: "tool-exec-cron-node-detail",
+      args: { command, host: "node", node: "ci-worker" },
+      isError: true,
+      result: {
+        error: "Command exited with code 1",
+        content: [{ type: "text", text: "Command exited with code 1" }],
+        details: { status: "failed", exitCode: 1 },
+      },
+    });
+
+    expect(ctx.state.lastToolError?.commandExcerpt).toContain("node: ci-worker");
+    const fullPayloads = buildEmbeddedRunPayloads({
+      assistantTexts: [],
+      lastAssistant: undefined,
+      lastToolError: ctx.state.lastToolError,
+      isCronTrigger: true,
+      sessionKey: "agent:main:cron:job-1:run:run-1",
+      toolResultFormat: "markdown" as const,
+      verboseLevel: "full",
+    });
+
+    expect(fullPayloads[0]?.text).toContain(command);
+    expect(fullPayloads[0]?.text).toContain("node: ci-worker");
+  });
+
   it("records structured error codes for failed tool results", async () => {
     const { ctx } = createTestContext();
 

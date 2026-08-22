@@ -68,7 +68,7 @@ type EmbeddedRunAttemptToolTerminalObservation = {
   meta?: string;
   executionStarted?: boolean;
   outcome: "success" | "failure";
-  failure?: Omit<ToolErrorSummary, "toolName" | "meta" | "mutatingAction">;
+  failure?: Omit<ToolErrorSummary, "toolName" | "meta" | "commandExcerpt" | "mutatingAction">;
   /** Protocol-owned mutation facts for native tools that do not use OpenClaw definitions. */
   nativeMutation?: {
     mutatingAction: boolean;

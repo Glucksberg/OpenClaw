@@ -21,6 +21,7 @@ export type ToolErrorSummary = {
   toolName: string;
   executionStarted?: boolean;
   meta?: string;
+  commandExcerpt?: string;
   errorCode?: string;
   error?: string;
   validationErrorSummary?: string;

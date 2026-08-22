@@ -592,6 +592,36 @@ function compactRawCommand(raw: string, maxLength = 120): string {
   return `${sliceUtf16Safe(oneLine, 0, half)}…${sliceUtf16Safe(oneLine, -(maxLength - 1 - half))}`;
 }
 
+/**
+ * Bounded exec failure fact: the redacted command plus the cwd/workdir/node
+ * context fragments already carried by the display meta. The warning
+ * formatter keeps recognized context suffixes and drops the remaining summary
+ * text, so appending the spanned command preserves location without leaking
+ * unredacted content.
+ */
+export function resolveExecFailureCommandExcerpt(
+  args: unknown,
+  meta: string | undefined,
+): string | undefined {
+  const excerpt = resolveExecCommandExcerpt(args);
+  if (!excerpt || !meta) {
+    return excerpt;
+  }
+  const spanned = formatInlineCodeSpan(excerpt);
+  // Meta may already end with the same spanned command (display detail shape);
+  // appending would duplicate it.
+  return meta.endsWith(spanned) ? meta : `${meta} · ${spanned}`;
+}
+
+function resolveExecCommandExcerpt(args: unknown): string | undefined {
+  const record = asRecord(args);
+  if (!record) {
+    return undefined;
+  }
+  const raw = typeof record.command === "string" ? record.command.trim() : undefined;
+  return raw ? compactRawCommand(unwrapShellWrapper(raw)) : undefined;
+}
+
 export type ToolDetailMode = "explain" | "raw";
 
 export function resolveExecDetail(
