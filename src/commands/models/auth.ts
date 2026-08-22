@@ -785,7 +785,7 @@ export async function modelsAuthClearCooldownCommand(
   runtime: RuntimeEnv,
 ): Promise<void> {
   const profileId = opts.profileId.trim();
-  const agentDir = await resolveModelsAuthAgentDir(opts.agent);
+  const { agentDir } = await resolveModelsAuthAgent(opts.agent);
   const store = loadAuthProfileStoreForRuntime(agentDir, { syncExternalCli: false });
   if (!Object.hasOwn(store.profiles, profileId)) {
     throw new Error(

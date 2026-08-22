@@ -242,7 +242,7 @@ describe("bounded AI Pulse X report", () => {
             { once: true },
           );
         });
-        await fs.appendFile(filePath, data, options);
+        await fs.appendFile(filePath, data);
       },
     );
     const search = vi.fn().mockResolvedValue([tweet("99")]);
