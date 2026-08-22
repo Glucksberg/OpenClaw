@@ -367,7 +367,12 @@ export function createGatewaySubagentRuntime(
       }>(
         "sessions.abort",
         { runId: params.runId },
-        pluginId ? { pluginRuntimeOwnerId: pluginId } : undefined,
+        {
+          // Same binding shape as sibling runtime methods: fall back to the
+          // bound/fallback gateway context when no plugin request scope is active.
+          resolveGatewayContext,
+          ...(pluginId ? { pluginRuntimeOwnerId: pluginId } : {}),
+        },
       );
       return {
         aborted:
