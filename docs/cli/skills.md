@@ -70,6 +70,7 @@ openclaw skills workshop propose-create --name "qa-check" --description "QA chec
 openclaw skills workshop propose-update qa-check --proposal ./PROPOSAL.md
 openclaw skills workshop list
 openclaw skills workshop inspect <proposal-id>
+openclaw skills workshop review <proposal-id>
 openclaw skills workshop revise <proposal-id> --proposal ./PROPOSAL.md
 openclaw skills workshop apply <proposal-id>
 openclaw skills workshop reject <proposal-id> --reason "Not reusable"
@@ -207,6 +208,7 @@ openclaw skills workshop propose-create \
 openclaw skills workshop propose-update qa-check --proposal ./PROPOSAL.md
 openclaw skills workshop list
 openclaw skills workshop inspect <proposal-id>
+openclaw skills workshop review <proposal-id>
 openclaw skills workshop revise <proposal-id> --proposal ./PROPOSAL.md
 openclaw skills workshop apply <proposal-id>
 openclaw skills workshop reject <proposal-id> --reason "Duplicate"
@@ -216,6 +218,11 @@ openclaw skills workshop quarantine <proposal-id> --reason "Needs security revie
 `propose-create`, `propose-update`, and `revise` also accept `--goal <text>`
 and `--evidence <text>` to record the proposal's motivation and supporting
 notes alongside the `--proposal`/`--proposal-dir` content.
+To select another agent workspace, place the parent option before the
+subcommand: `openclaw skills workshop --agent <id> review <proposal-id>`.
+`review` prints the exact revision hash with the canonical create content or
+live-target update diff. Lifecycle commands bind their decision to the current
+inspected proposal revision and fail closed if it changes before the write.
 
 ## Related
 

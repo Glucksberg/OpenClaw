@@ -63,7 +63,7 @@ describe("skill_workshop review mode", () => {
 
     expect(
       (tool.parameters as { properties: { action: { enum: string[] } } }).properties.action.enum,
-    ).toEqual(["create", "revise", "list", "inspect"]);
+    ).toEqual(["create", "revise", "list", "inspect", "review"]);
     await expect(
       tool.execute("call-apply", { action: "apply", proposal_id: "proposal-1" }),
     ).rejects.toThrow("only inspect or draft proposals");
@@ -78,13 +78,23 @@ describe("skill_workshop review mode", () => {
       }),
     ).rejects.toThrow("only inspect or draft proposals");
 
-    await tool.execute("call-create", {
+    const drafted = await tool.execute("call-create", {
       action: "create",
       name: "Review Learning",
       description: "Reuse a recovered workflow",
       proposal_content: "# Review Learning\n\nFollow the recovered workflow.\n",
     });
     expect(proposalMutationBudget.completed).toBe(1);
+    // review is a read-only preview, so a spent mutation budget must not withdraw it
+    // the way apply/evaluate stay withdrawn from proposal-only reviewers above.
+    const previewed = await tool.execute("call-review", {
+      action: "review",
+      proposal_id: (drafted.details as { id: string }).id,
+    });
+    expect((previewed.details as { reviewMode: string }).reviewMode).toBe("full");
+    expect((previewed.content[0] as { text: string }).text).toContain(
+      "Follow the recovered workflow.",
+    );
     const retryTool = createSkillWorkshopTool({
       workspaceDir,
       proposalOnly: true,
@@ -158,7 +168,7 @@ describe("skill_workshop review mode", () => {
     expect(
       (reviewTool.parameters as { properties: { action: { enum: string[] } } }).properties.action
         .enum,
-    ).toEqual(["create", "patch", "update", "read", "revise", "list", "inspect"]);
+    ).toEqual(["create", "patch", "update", "read", "revise", "list", "inspect", "review"]);
 
     await expect(
       reviewTool.execute("patch-without-read", {

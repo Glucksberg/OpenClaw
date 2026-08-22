@@ -201,6 +201,22 @@ struct GatewayProtocolGeneratedModelsTests {
     }
 
     @Test(arguments: [
+        (#"{"record":{"schema":"openclaw.skill-workshop.proposal.v1","id":"proposal-1","kind":"create","status":"pending","title":"Preview","description":"Review first","createdAt":"2026-08-21T00:00:00Z","updatedAt":"2026-08-21T00:00:00Z","createdBy":"gateway","proposedVersion":"v1","draftFile":"PROPOSAL.md","draftHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","target":{"skillName":"Preview","skillKey":"preview","skillDir":"/workspace/skills/preview","skillFile":"/workspace/skills/preview/SKILL.md"},"scan":{"state":"clean","scannedAt":"2026-08-21T00:00:00Z","critical":0,"warn":0,"info":0,"findings":[]}},"revisionHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","mode":"full","content":"# Preview","supportFiles":[]}"#, "full"),
+        (#"{"record":{"schema":"openclaw.skill-workshop.proposal.v1","id":"proposal-1","kind":"update","status":"pending","title":"Preview","description":"Review first","createdAt":"2026-08-21T00:00:00Z","updatedAt":"2026-08-21T00:00:00Z","createdBy":"gateway","proposedVersion":"v1","draftFile":"PROPOSAL.md","draftHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","target":{"skillName":"Preview","skillKey":"preview","skillDir":"/workspace/skills/preview","skillFile":"/workspace/skills/preview/SKILL.md"},"scan":{"state":"clean","scannedAt":"2026-08-21T00:00:00Z","critical":0,"warn":0,"info":0,"findings":[]}},"revisionHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","mode":"diff","diff":"--- SKILL.md\n+++ SKILL.md\n"}"#, "diff"),
+        (#"{"record":{"schema":"openclaw.skill-workshop.proposal.v1","id":"proposal-1","kind":"update","status":"pending","title":"Preview","description":"Review first","createdAt":"2026-08-21T00:00:00Z","updatedAt":"2026-08-21T00:00:00Z","createdBy":"gateway","proposedVersion":"v1","draftFile":"PROPOSAL.md","draftHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","target":{"skillName":"Preview","skillKey":"preview","skillDir":"/workspace/skills/preview","skillFile":"/workspace/skills/preview/SKILL.md"},"scan":{"state":"clean","scannedAt":"2026-08-21T00:00:00Z","critical":0,"warn":0,"info":0,"findings":[]}},"revisionHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","mode":"unavailable","reason":"target-changed"}"#, "unavailable"),
+    ])
+    func `skill proposal review results decode every mode`(json: String, expectedMode: String) throws {
+        let result = try JSONDecoder().decode(
+            SkillsProposalReviewResult.self,
+            from: Data(json.utf8))
+        switch result {
+        case .full: #expect(expectedMode == "full")
+        case .diff: #expect(expectedMode == "diff")
+        case .unavailable: #expect(expectedMode == "unavailable")
+        }
+    }
+
+    @Test(arguments: [
         (#"{"status":"pending","retryAfterMs":5000}"#, "pending"),
         (#"{"status":"slow_down","retryAfterMs":10000}"#, "slow_down"),
         (#"{"status":"access_denied"}"#, "access_denied"),

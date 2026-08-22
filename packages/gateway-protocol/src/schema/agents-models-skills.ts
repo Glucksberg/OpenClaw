@@ -811,6 +811,47 @@ export const SkillsProposalInspectResultSchema = closedObject({
   supportFiles: Type.Optional(Type.Array(SkillProposalSupportFileInputSchema, { maxItems: 64 })),
 });
 
+/** Selects a proposal whose exact apply preview should be rendered. */
+export const SkillsProposalReviewParamsSchema = SkillsProposalInspectParamsSchema;
+
+/** Canonical create content shown before proposal approval. */
+export const SkillsProposalReviewFullResultSchema = closedObject({
+  record: SkillProposalRecordSchema,
+  revisionHash: Sha256String,
+  mode: Type.Literal("full"),
+  content: SkillProposalContentString,
+  supportFiles: Type.Array(SkillProposalSupportFileInputSchema, { maxItems: 64 }),
+});
+
+/** Unified live-target diff shown before proposal approval. */
+export const SkillsProposalReviewDiffResultSchema = closedObject({
+  record: SkillProposalRecordSchema,
+  revisionHash: Sha256String,
+  mode: Type.Literal("diff"),
+  diff: Type.String({ maxLength: 524_288 }),
+});
+
+/** Fail-closed reason returned when an exact preview cannot be trusted. */
+export const SkillsProposalReviewUnavailableResultSchema = closedObject({
+  record: SkillProposalRecordSchema,
+  revisionHash: Sha256String,
+  mode: Type.Literal("unavailable"),
+  reason: Type.Union([
+    Type.Literal("proposal-changed"),
+    Type.Literal("target-changed"),
+    Type.Literal("target-missing"),
+    Type.Literal("diff-limit"),
+    Type.Literal("output-limit"),
+  ]),
+});
+
+/** Exact content, diff, or fail-closed reason shown before proposal approval. */
+export const SkillsProposalReviewResultSchema = Type.Union([
+  SkillsProposalReviewFullResultSchema,
+  SkillsProposalReviewDiffResultSchema,
+  SkillsProposalReviewUnavailableResultSchema,
+]);
+
 /** Creates a proposal for a new skill. */
 export const SkillsProposalCreateParamsSchema = closedObject({
   agentId: Type.Optional(NonEmptyString),
@@ -1427,6 +1468,13 @@ export type SkillsProposalsListParams = Static<typeof SkillsProposalsListParamsS
 export type SkillsProposalsListResult = Static<typeof SkillsProposalsListResultSchema>;
 export type SkillsProposalInspectParams = Static<typeof SkillsProposalInspectParamsSchema>;
 export type SkillsProposalInspectResult = Static<typeof SkillsProposalInspectResultSchema>;
+export type SkillsProposalReviewParams = Static<typeof SkillsProposalReviewParamsSchema>;
+export type SkillsProposalReviewFullResult = Static<typeof SkillsProposalReviewFullResultSchema>;
+export type SkillsProposalReviewDiffResult = Static<typeof SkillsProposalReviewDiffResultSchema>;
+export type SkillsProposalReviewUnavailableResult = Static<
+  typeof SkillsProposalReviewUnavailableResultSchema
+>;
+export type SkillsProposalReviewResult = Static<typeof SkillsProposalReviewResultSchema>;
 export type SkillsProposalCreateParams = Static<typeof SkillsProposalCreateParamsSchema>;
 export type SkillsProposalUpdateParams = Static<typeof SkillsProposalUpdateParamsSchema>;
 export type SkillsProposalReviseParams = Static<typeof SkillsProposalReviseParamsSchema>;

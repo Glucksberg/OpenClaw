@@ -57,6 +57,7 @@ import {
   readSkillProposalDraftDirectory,
   readSkillProposalDraftFile,
   rejectSkillProposal,
+  reviewSkillProposal,
   reviseSkillProposal,
 } from "../skills/workshop/service.js";
 import type {
@@ -64,6 +65,7 @@ import type {
   SkillProposalEvaluateResult,
   SkillProposalManifest,
   SkillProposalReadResult,
+  SkillProposalReviewResult,
   SkillProposalSupportFileInput,
 } from "../skills/workshop/types.js";
 import { CONFIG_DIR } from "../utils.js";
@@ -364,6 +366,28 @@ function formatSkillProposalEvaluation(result: SkillProposalEvaluateResult): str
   return `${lines.join("\n")}\n`;
 }
 
+function formatSkillProposalReview(review: SkillProposalReviewResult): string {
+  const header = [
+    `Proposal: ${review.record.id}`,
+    `Version: ${review.record.proposedVersion}`,
+    `Revision hash: ${review.revisionHash}`,
+    `Review: ${review.mode}`,
+    "",
+  ];
+  if (review.mode === "diff") {
+    return [...header, review.diff || "No changes would be applied."].join("\n");
+  }
+  if (review.mode === "unavailable") {
+    return [...header, `Review unavailable: ${review.reason}`].join("\n");
+  }
+  return [
+    ...header,
+    "--- SKILL.md ---",
+    review.content,
+    ...review.supportFiles.flatMap((file) => ["", `--- ${file.path} ---`, file.content]),
+  ].join("\n");
+}
+
 function formatSkillCuratorStatus(status: SkillCuratorStatus): string {
   const timestamp = (value: number | null) =>
     value === null ? "never" : new Date(value).toISOString();
@@ -525,6 +549,63 @@ async function runSkillProposalApply(
     clientName: GATEWAY_CLIENT_NAMES.CLI,
     mode: GATEWAY_CLIENT_MODES.CLI,
   });
+}
+
+async function runSkillProposalReview(
+  resolved: ResolvedSkillsWorkspace,
+  proposalId: string,
+): Promise<SkillProposalReviewResult> {
+  const { callGateway, isGatewayCredentialsRequiredError, isGatewayTransportError } =
+    await import("../gateway/call.js");
+  try {
+    return await callGateway<SkillProposalReviewResult>({
+      config: resolved.config,
+      method: "skills.proposals.review",
+      params: { agentId: resolved.agentId, proposalId },
+      timeoutMs: GATEWAY_SKILLS_STATUS_TIMEOUT_MS,
+      clientName: GATEWAY_CLIENT_NAMES.CLI,
+      mode: GATEWAY_CLIENT_MODES.CLI,
+      requiredMethods: ["skills.proposals.review"],
+    });
+  } catch (err) {
+    const isLocalTransportClosure =
+      isGatewayTransportError(err) &&
+      err.kind === "closed" &&
+      err.code === 1006 &&
+      err.connectionDetails.urlSource === "local loopback";
+    const isOfflineCandidate =
+      (isGatewayCredentialsRequiredError(err) &&
+        !normalizeOptionalString(process.env.OPENCLAW_GATEWAY_URL)) ||
+      isLocalTransportClosure;
+    if (resolved.config.gateway?.mode === "remote" || !isOfflineCandidate) {
+      throw err;
+    }
+    const { acquireGatewayLock } = await import("../infra/gateway-lock.js");
+    let lock: Awaited<ReturnType<typeof acquireGatewayLock>>;
+    try {
+      lock = await acquireGatewayLock({
+        allowInTests: true,
+        port: resolveGatewayPort(resolved.config, process.env),
+        role: "skill-workshop-review",
+        timeoutMs: GATEWAY_SKILLS_OFFLINE_LOCK_TIMEOUT_MS,
+      });
+    } catch {
+      throw err;
+    }
+    if (!lock) {
+      throw err;
+    }
+    try {
+      return await reviewSkillProposal({
+        workspaceDir: resolved.workspaceDir,
+        agentId: resolved.agentId,
+        config: resolved.config,
+        proposalId,
+      });
+    } finally {
+      await lock.release();
+    }
+  }
 }
 
 async function runSkillProposalEvaluate(
@@ -1177,6 +1258,26 @@ export function registerSkillsCli(program: Command) {
         (proposal) => `Revised ${proposal.record.id} ${proposal.record.proposedVersion}\n`,
       ),
     );
+
+  workshop
+    .command("review")
+    .description("Show the exact content or diff a proposal would apply")
+    .argument("<proposal-id>", "Skill proposal id")
+    .option("--json", "Output as JSON", false)
+    .action(async (proposalId: string, opts: { json?: boolean; agent?: string }) => {
+      try {
+        const resolved = resolveSkillsWorkspaceForCommand(workshop, opts);
+        const review = await runSkillProposalReview(resolved, proposalId);
+        if (hasJsonOutput(opts)) {
+          defaultRuntime.writeJson(review);
+          return;
+        }
+        defaultRuntime.writeStdout(formatSkillProposalReview(review));
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
 
   workshop
     .command("evaluate")

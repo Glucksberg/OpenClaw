@@ -1254,9 +1254,16 @@ describe("buildAgentSystemPrompt", () => {
       "Durable reusable skill/playbook/workflow work: `skill_workshop`; never write proposal/skill files directly.",
       "Used skill proved wrong or incomplete: call `skill_workshop` read, then patch it now; the configured autonomous mode disables repair, leaves it pending, or applies it immediately. Capture only durable, evidenced procedure changes—never task artifacts, transient failures, or unresolved guesses.",
       "Other generated work = pending proposal. Apply/reject/quarantine only explicit user ask.",
+      "Review: show current page; reuse expected_revision_hash for later pages/lifecycle.",
       "proposal_content = complete final skill body, never plan/diff; update/revise preserves unchanged content.",
       "",
     ]);
+    const sectionText = section.join("\n");
+    expect(sectionText).toContain("Durable reusable skill/playbook/workflow work");
+    expect(sectionText).toContain("`skill_workshop`");
+    expect(sectionText).toContain("Other generated work = pending proposal");
+    expect(sectionText).toContain("reuse expected_revision_hash for later pages/lifecycle");
+    expect(sectionText).toContain("only explicit user ask");
 
     const withoutTool = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
@@ -1269,7 +1276,7 @@ describe("buildAgentSystemPrompt", () => {
       workspaceDir: "/tmp/openclaw",
       toolNames: ["read", "skill_workshop"],
     });
-    expect(withTool).toContain("- skill_workshop: Manage reusable-skill proposals");
+    expect(withTool).toContain("- skill_workshop: Manage/review reusable-skill proposals");
     expect(withTool).toContain("## Skill Workshop");
     expect(withTool).toContain("Durable reusable skill/playbook/workflow work");
     expect(withTool).toContain("Used skill proved wrong or incomplete");

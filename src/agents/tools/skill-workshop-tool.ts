@@ -50,6 +50,7 @@ import {
   actionResult,
   beginProposalReviewMutation,
   completeProposalReview,
+  executeSkillWorkshopReview,
   proposalMutationText,
   proposalResult,
   proposalReviewPhase,
@@ -364,6 +365,10 @@ export function createSkillWorkshopTool(options: SkillWorkshopToolOptions): AnyA
             contentIncluded: projection.contentIncluded,
           },
         });
+      }
+
+      if (action === "review") {
+        return executeSkillWorkshopReview(params, options);
       }
 
       if (action === "evaluate") {

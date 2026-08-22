@@ -267,24 +267,25 @@ and paths outside the standard support folders.
 ## Agent tool
 
 The model uses `skill_workshop` with one required `action`:
-`create | read | patch | update | revise | list | inspect | evaluate | apply | reject | quarantine | history | restore_collection`.
+`create | read | patch | update | revise | list | inspect | review | evaluate | apply | reject | quarantine | history | restore_collection`.
 Other parameters apply depending on the action:
 
-| Parameter                  | Used by                                                          | Notes                                                                |
-| -------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `name`                     | `create`, `inspect`, `revise`                                    | Required for `create`; resolves a pending proposal by name otherwise |
-| `description`              | `create`, `update`, `revise`                                     | Max 160 bytes                                                        |
-| `skill_name`               | `read`, `patch`, `update`                                        | Existing skill name or key                                           |
-| `old_string`, `new_string` | `patch`                                                          | Exact current text and its replacement; read the skill first         |
-| `proposal_content`         | `create`, `update`, `revise`                                     | Required for create/update; omit on revise to preserve the body      |
-| `support_files`            | `create`, `update`, `revise`                                     | Array of `{ path, content }`                                         |
-| `goal`, `evidence`         | `create`, `update`, `revise`                                     | Free-text context                                                    |
-| `proposal_id`              | `inspect`, `revise`, `evaluate`, `apply`, `reject`, `quarantine` | Target proposal                                                      |
-| `artifact_path`            | `inspect`                                                        | `PROPOSAL.md` or one listed support-file path                        |
-| `expected_revision_hash`   | `evaluate`, `apply`, `reject`, `quarantine`                      | Rejects a stale orchestration step                                   |
-| `correlation_id`           | `evaluate`, `revise`, `apply`, `reject`, `quarantine`            | External run or experiment correlation                               |
-| `reason`                   | `apply`, `reject`, `quarantine`                                  | Optional                                                             |
-| `query`, `status`, `limit` | `list`                                                           | Filter/paginate; `limit` max 50, default 20                          |
+| Parameter                  | Used by                                                                    | Notes                                                                |
+| -------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `name`                     | `create`, `inspect`, `review`, `revise`                                    | Required for `create`; resolves a pending proposal by name otherwise |
+| `description`              | `create`, `update`, `revise`                                               | Max 160 bytes                                                        |
+| `skill_name`               | `read`, `patch`, `update`                                                  | Existing skill name or key                                           |
+| `old_string`, `new_string` | `patch`                                                                    | Exact current text and its replacement; read the skill first         |
+| `proposal_content`         | `create`, `update`, `revise`                                               | Required for create/update; omit on revise to preserve the body      |
+| `support_files`            | `create`, `update`, `revise`                                               | Array of `{ path, content }`                                         |
+| `goal`, `evidence`         | `create`, `update`, `revise`                                               | Free-text context                                                    |
+| `proposal_id`              | `inspect`, `review`, `revise`, `evaluate`, `apply`, `reject`, `quarantine` | Target proposal; required after review page 1                        |
+| `page`                     | `review`                                                                   | One-based output page; defaults to 1                                 |
+| `artifact_path`            | `inspect`                                                                  | `PROPOSAL.md` or one listed support-file path                        |
+| `expected_revision_hash`   | `review`, `evaluate`, `apply`, `reject`, `quarantine`                      | Required after review page 1; rejects stale orchestration            |
+| `correlation_id`           | `evaluate`, `revise`, `apply`, `reject`, `quarantine`                      | External run or experiment correlation                               |
+| `reason`                   | `apply`, `reject`, `quarantine`                                            | Optional                                                             |
+| `query`, `status`, `limit` | `list`                                                                     | Filter/paginate; `limit` max 50, default 20                          |
 
 `inspect` returns proposal metadata, a bounded artifact manifest, and one
 complete artifact when it fits the selected model's context budget. It selects
@@ -292,6 +293,11 @@ complete artifact when it fits the selected model's context budget. It selects
 separately. When the selected artifact does not fit, the result omits its body,
 reports the original size, and points to smaller per-artifact reads or the
 unbounded operator CLI command shown above.
+
+`review` returns the canonical skill content for a create proposal or a unified
+diff against the live skill for an update. Output is bounded and paginated;
+later pages require the revision hash returned on page 1 so concurrent proposal
+changes cannot splice different revisions into one review.
 
 Agents must use `skill_workshop` for generated skill work and must not create or
 change skill or proposal files directly. This rule is advisory and

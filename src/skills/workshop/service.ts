@@ -55,6 +55,7 @@ export {
   listSkillProposals,
   resolvePendingSkillProposal,
 } from "./service-query.js";
+export { reviewSkillProposal } from "./service-review.js";
 export { evaluateSkillProposal, listSkillProposalEvents } from "./service-evaluation.js";
 
 function proposalStoreOptions(env?: NodeJS.ProcessEnv) {
