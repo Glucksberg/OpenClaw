@@ -355,6 +355,26 @@ export function createGatewaySubagentRuntime(
         ...(status !== "ok" && error ? { error } : {}),
       };
     },
+    async cancelRun(params) {
+      const scope = getPluginRuntimeGatewayRequestScope();
+      const pluginId =
+        typeof scope?.pluginId === "string" && scope.pluginId.trim()
+          ? scope.pluginId.trim()
+          : undefined;
+      const payload = await dispatchGatewayMethodInProcess<{
+        aborted?: boolean;
+        runIds?: unknown[];
+      }>(
+        "sessions.abort",
+        { runId: params.runId },
+        pluginId ? { pluginRuntimeOwnerId: pluginId } : undefined,
+      );
+      return {
+        aborted:
+          payload?.aborted === true ||
+          (Array.isArray(payload?.runIds) && payload.runIds.includes(params.runId)),
+      };
+    },
     getSessionMessages,
     async deleteSession(params) {
       const scope = getPluginRuntimeGatewayRequestScope();

@@ -37,6 +37,7 @@ export type SubagentSurface = {
     runId: string;
     timeoutMs?: number;
   }) => Promise<{ status: string; error?: string }>;
+  cancelRun?: (params: { runId: string }) => Promise<{ aborted: boolean }>;
   getSessionMessages: (params: {
     sessionKey: string;
     limit?: number;
@@ -99,6 +100,7 @@ const NARRATIVE_SYSTEM_PROMPT = [
 // worst case at one minute, well below the multi-minute stall the original
 // comment warned against.
 const NARRATIVE_TIMEOUT_MS = 60_000;
+const NARRATIVE_CANCEL_SETTLE_TIMEOUT_MS = 10_000;
 const NARRATIVE_MESSAGE_FETCH_LIMIT = 5;
 // A completed run can reach the session reader before the final assistant text
 // is visible, so retry briefly before falling back to synthetic diary text.
@@ -856,6 +858,23 @@ async function generateAndAppendDreamNarrative(
             timeoutMs: NARRATIVE_TIMEOUT_MS,
           });
 
+          if (result.status === "timeout") {
+            if (!params.subagent.cancelRun) {
+              cleanupFailure = "subagent runtime cannot cancel a timed-out narrative run";
+            } else {
+              const cancellation = await params.subagent.cancelRun({ runId });
+              const settled = await params.subagent.waitForRun({
+                runId,
+                timeoutMs: NARRATIVE_CANCEL_SETTLE_TIMEOUT_MS,
+              });
+              if (settled.status === "timeout") {
+                cleanupFailure = cancellation.aborted
+                  ? "timed-out narrative run did not settle after cancellation"
+                  : "timed-out narrative run could not be cancelled or settled";
+              }
+            }
+          }
+
           if (result.status === "ok") {
             successfulSessionKey = attemptSessionKey;
             break;
@@ -996,8 +1015,9 @@ async function generateAndAppendDreamNarrative(
 //
 // `runDetachedNarrativeJob` caps total in-flight detached narratives across
 // phases/workspaces so cron sweeps cannot exhaust model and session-lock slots.
-const DETACHED_NARRATIVE_CONCURRENCY = 3;
+const DETACHED_NARRATIVE_CONCURRENCY = 1;
 const detachedNarrativeLimit = pLimit(DETACHED_NARRATIVE_CONCURRENCY);
+const detachedNarrativeJobs = new Set<Promise<void>>();
 
 function runDetachedNarrativeJob(params: {
   job: () => Promise<DreamNarrativeOutcome>;
@@ -1005,19 +1025,28 @@ function runDetachedNarrativeJob(params: {
   phase: NarrativePhaseData["phase"];
   workspaceDir: string;
 }): void {
-  queueMicrotask(() => {
-    void detachedNarrativeLimit(params.job)
-      .then((outcome) => {
-        if (outcome.status === "degraded") {
-          params.logger.warn(
-            `memory-core: detached dreaming narrative degraded for ${params.phase} phase [workspace=${params.workspaceDir}]: ${outcome.error}`,
-          );
-        }
-      })
-      .catch(() => {
-        // Unexpected failures are logged by the narrative job before reaching this boundary.
-      });
-  });
+  const pending = detachedNarrativeLimit(params.job)
+    .then((outcome) => {
+      if (outcome.status === "degraded") {
+        params.logger.warn(
+          `memory-core: detached dreaming narrative degraded for ${params.phase} phase [workspace=${params.workspaceDir}]: ${outcome.error}`,
+        );
+      }
+    })
+    .catch(() => {
+      // Unexpected failures are logged by the narrative job before reaching this boundary.
+    })
+    .finally(() => {
+      detachedNarrativeJobs.delete(pending);
+    });
+  detachedNarrativeJobs.add(pending);
+}
+
+/** Keep the owning sweep lease until every accepted detached narrative has settled and cleaned up. */
+export async function drainDetachedDreamNarrativeJobs(): Promise<void> {
+  while (detachedNarrativeJobs.size > 0) {
+    await Promise.all(detachedNarrativeJobs);
+  }
 }
 
 /**

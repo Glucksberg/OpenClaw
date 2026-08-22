@@ -54,6 +54,13 @@ type SubagentWaitParams = {
   timeoutMs?: number;
 };
 
+type SubagentCancelParams = {
+  runId: string;
+};
+
+type SubagentCancelResult = {
+  aborted: boolean;
+};
 type SubagentGetSessionMessagesParams = {
   sessionKey: string;
   limit?: number;
@@ -134,6 +141,8 @@ export type PluginRuntime = PluginRuntimeCore & {
   subagent: {
     run: (params: SubagentRunParams) => Promise<SubagentRunResult>;
     waitForRun: (params: SubagentWaitParams) => Promise<AgentWaitResult>;
+    /** Physically abort an accepted run before deleting its session artifacts. */
+    cancelRun?: (params: SubagentCancelParams) => Promise<SubagentCancelResult>;
     getSessionMessages: (
       params: SubagentGetSessionMessagesParams,
     ) => Promise<SubagentGetSessionMessagesResult>;

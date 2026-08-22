@@ -79,6 +79,7 @@
   "memory-core-host-runtime-files",
   "memory-core-host-secret",
   "memory-core-host-status",
+  "gateway-health-runtime",
   "memory-host-events",
   "memory-host-markdown",
   "memory-host-search",

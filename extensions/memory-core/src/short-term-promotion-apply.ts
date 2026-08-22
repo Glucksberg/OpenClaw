@@ -384,6 +384,7 @@ export async function applyShortTermPromotions(
   const plannedCandidateFingerprints = new Map(
     toAppend.map((candidate) => [candidate.key, consolidationCandidateFingerprint(candidate)]),
   );
+  const consolidationAttempted = Boolean(options.consolidation?.subagent && toAppend.length > 0);
 
   let compactedDates: string[] = [];
   const budgetChars =
@@ -549,7 +550,10 @@ export async function applyShortTermPromotions(
           }
         }
       }
-      if (!consolidationResult) {
+      if (
+        !consolidationResult &&
+        !(options.consolidation?.requireSuccess === true && consolidationAttempted)
+      ) {
         if (consolidationPlan) {
           options.consolidation?.logger.warn(
             "memory-core: promotion state or MEMORY.md changed during consolidation; using append-only fallback.",
@@ -664,5 +668,11 @@ export async function applyShortTermPromotions(
       })),
     compactedSections: compactedDates.length,
     compactedDates,
+    ...(consolidationAttempted
+      ? {
+          consolidationAttempted: true,
+          consolidationSucceeded: consolidationResult !== null,
+        }
+      : {}),
   };
 }

@@ -200,6 +200,8 @@ export type ApplyShortTermPromotionsOptions = {
   consolidation?: {
     subagent?: import("./dreaming-narrative.js").SubagentSurface;
     model?: string;
+    /** Keep candidates unpromoted when the model plan cannot be committed so a caller can retry. */
+    requireSuccess?: boolean;
     logger: {
       info: (message: string) => void;
       warn: (message: string) => void;
@@ -221,6 +223,8 @@ export type ApplyShortTermPromotionsResult = {
   compactedSections: number;
   /** Dates of the compacted promotion sections, oldest first. */
   compactedDates: string[];
+  consolidationAttempted?: boolean;
+  consolidationSucceeded?: boolean;
 };
 
 export type ShortTermDreamingStatsEntry = {
