@@ -848,13 +848,17 @@ function createSharedCodexAppServerClientStartup(params: {
       const state = getSharedCodexAppServerClientState();
       params.entry.client = startedClient;
       // Graceful retirement detaches active clients from the acquisition map,
-      // so global teardown tracks physical lifetime until the close notification.
+      // so global teardown tracks physical lifetime until the transport exits.
       state.liveClients.add(startedClient);
       startedClient.addCloseHandler((closedClient) => {
-        state.liveClients.delete(closedClient);
+        // Physical-lifetime ownership stays with waitForTransportExit below;
+        // codex app-server drains gracefully on close before the transport exits.
         if (state.entriesByClient.get(closedClient) === params.entry) {
           clearSharedClientEntryIfCurrent(params.key, closedClient);
         }
+      });
+      void startedClient.waitForTransportExit().then(() => {
+        getSharedCodexAppServerClientState().liveClients.delete(startedClient);
       });
       for (const callback of params.entry.onStartedClientCallbacks) {
         callback(startedClient);
