@@ -2112,10 +2112,12 @@ describe("shared Codex app-server client", () => {
 
         const startedAt = Date.now();
         await clearSharedCodexAppServerClientAndWait({
-          exitTimeoutMs: 500,
+          // Upstream close() arms a default 1s force-kill fuse for already
+          // logically closed detached clients; the wait window must outlive it.
+          exitTimeoutMs: 1_500,
           forceKillDelayMs: 20,
         });
-        expect(Date.now() - startedAt).toBeLessThan(900);
+        expect(Date.now() - startedAt).toBeLessThan(2_500);
         expect(isProcessRunning(firstPid as number)).toBe(false);
         expect(isProcessRunning(secondPid as number)).toBe(false);
       } finally {
