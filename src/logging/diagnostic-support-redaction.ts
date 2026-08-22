@@ -408,9 +408,10 @@ export function sanitizeSupportSnapshotValue(
   const sanitized = createSupportRecord();
   const { count, entries } = limitedSupportObjectEntries(record);
   for (const { key: entryKey, value: entryValue } of entries) {
-    sanitized[entryKey] = isPrivateSupportField(entryKey)
-      ? "<redacted>"
-      : sanitizeSupportSnapshotValue(entryValue, redaction, entryKey, depth + 1);
+    sanitized[entryKey] =
+      key === "environment" || isPrivateSupportField(entryKey)
+        ? "<redacted>"
+        : sanitizeSupportSnapshotValue(entryValue, redaction, entryKey, depth + 1);
   }
   addTruncationMetadata(sanitized, count);
   return sanitized;
