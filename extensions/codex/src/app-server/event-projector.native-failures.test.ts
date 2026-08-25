@@ -114,6 +114,7 @@ describe("CodexAppServerEventProjector native tool failure recovery", () => {
     expect(projector.buildResult(buildEmptyToolTelemetry()).lastToolError).toEqual({
       toolName: "bash",
       meta: "run tests (workspace)",
+      commandExcerpt: "run tests (workspace) · `pnpm test extensions/codex`",
       error: "codex native tool blocked",
       executionStarted: false,
       mutatingAction: false,
