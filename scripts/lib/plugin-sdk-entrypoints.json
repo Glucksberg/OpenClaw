@@ -113,6 +113,7 @@
   "security-runtime",
   "gateway-config-runtime",
   "gateway-method-runtime",
+  "gateway-health-runtime",
   "gateway-runtime",
   "websocket-runtime",
   "cli-argv",

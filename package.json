@@ -404,7 +404,8 @@
     "!dist/plugin-sdk/session-catalog-paging.d.ts",
     "!dist/plugin-sdk/provider-auth-aliases.d.ts",
     "!dist/plugin-sdk/provider-model-metadata.d.ts",
-    "!dist/plugin-sdk/websocket-runtime.d.ts"
+    "!dist/plugin-sdk/websocket-runtime.d.ts",
+    "!dist/plugin-sdk/gateway-health-runtime.d.ts"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -810,6 +811,9 @@
     "./plugin-sdk/gateway-method-runtime": {
       "types": "./dist/plugin-sdk/gateway-method-runtime.d.ts",
       "default": "./dist/plugin-sdk/gateway-method-runtime.js"
+    },
+    "./plugin-sdk/gateway-health-runtime": {
+      "default": "./dist/plugin-sdk/gateway-health-runtime.js"
     },
     "./plugin-sdk/gateway-runtime": {
       "types": "./dist/plugin-sdk/gateway-runtime.d.ts",

@@ -7,6 +7,7 @@ import {
   SUBAGENT_RUNTIME_REQUEST_SCOPE_ERROR_CODE,
 } from "openclaw/plugin-sdk/error-runtime";
 import type { PluginRuntime } from "openclaw/plugin-sdk/runtime-store";
+import pLimit from "p-limit";
 import { appendNarrativeEntry, clampDreamDiaryContextEntry } from "./dreaming-dreams-file.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -318,10 +319,47 @@ async function generateAndAppendDreamNarrative(
   return { status: "completed" };
 }
 
+// Cron-driven dreaming detaches narrative generation across phases and workspaces.
+// Serialize the shared work and retain each promise so the owning sweep can drain it.
+const DETACHED_NARRATIVE_CONCURRENCY = 1;
+const detachedNarrativeLimit = pLimit(DETACHED_NARRATIVE_CONCURRENCY);
+const detachedNarrativeJobs = new Set<Promise<void>>();
+
+function runDetachedNarrativeJob(params: {
+  job: () => Promise<DreamNarrativeOutcome>;
+  logger: Logger;
+  phase: NarrativePhaseData["phase"];
+  workspaceDir: string;
+}): void {
+  const pending = detachedNarrativeLimit(params.job)
+    .then((outcome) => {
+      if (outcome.status === "degraded") {
+        params.logger.warn(
+          `memory-core: detached dreaming narrative degraded for ${params.phase} phase [workspace=${params.workspaceDir}]: ${outcome.error}`,
+        );
+      }
+    })
+    .catch((error: unknown) => {
+      params.logger.warn(
+        `memory-core: detached dreaming narrative failed for ${params.phase} phase [workspace=${params.workspaceDir}]: ${formatErrorMessage(error)}`,
+      );
+    })
+    .finally(() => {
+      detachedNarrativeJobs.delete(pending);
+    });
+  detachedNarrativeJobs.add(pending);
+}
+
+/** Keep the owning sweep lease until every accepted detached narrative has settled. */
+export async function drainDetachedDreamNarrativeJobs(): Promise<void> {
+  while (detachedNarrativeJobs.size > 0) {
+    await Promise.all(detachedNarrativeJobs);
+  }
+}
+
 /**
- * Single entry point for every dreaming phase. Cron sweeps detach so a stalled diary run
- * cannot hold the sweep open; heartbeat sweeps await so the phase reports the outcome.
- * A sweep without an owning agent still runs; only the subagent narrative is unavailable.
+ * Single entry point for every dreaming phase. Cron sweeps enqueue bounded diary work;
+ * heartbeat sweeps await it directly. A sweep without an owning agent still runs.
  */
 export async function runDreamNarrative(
   params: Omit<DreamNarrativeRequest, "agentId"> & { agentId?: string; detached?: boolean },
@@ -347,13 +385,11 @@ export async function runDreamNarrative(
         return { status: "completed" as const };
       };
   if (detached) {
-    // The shared runtime queue bounds inference; the sweep never waits for diary publication.
-    queueMicrotask(() => {
-      void job().catch((error: unknown) => {
-        rest.logger.warn(
-          `memory-core: detached dreaming narrative failed for ${rest.data.phase} phase: ${formatErrorMessage(error)}`,
-        );
-      });
+    runDetachedNarrativeJob({
+      job,
+      logger: rest.logger,
+      phase: rest.data.phase,
+      workspaceDir: rest.workspaceDir,
     });
     return { status: "pending" };
   }
