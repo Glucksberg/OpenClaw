@@ -254,6 +254,7 @@ describe("diagnostic support export", () => {
             environment: {
               HOME: tempDir,
               OPENCLAW_GATEWAY_TOKEN: fakeToken,
+              SNARF_X_CT0: "diagnostic-env-sentinel",
             },
           },
         },
@@ -323,6 +324,7 @@ describe("diagnostic support export", () => {
     expect(combined).not.toContain(requestAuthValue);
     expect(combined).not.toContain(requestTlsPassphrase);
     expect(combined).not.toContain(proxyTlsPassphrase);
+    expect(combined).not.toContain("diagnostic-env-sentinel");
     expect(combined).not.toContain("__OPENCLAW_REDACTED__");
     expect(combined).not.toContain("gateway-session-15555551212");
     expect(combined).not.toContain("supportEventSecret");
@@ -382,7 +384,9 @@ describe("diagnostic support export", () => {
       "--token",
       "<redacted>",
     ]);
+    expect(status.data?.service?.command?.environment?.HOME).toBe("<redacted>");
     expect(status.data?.service?.command?.environment?.OPENCLAW_GATEWAY_TOKEN).toBe("<redacted>");
+    expect(status.data?.service?.command?.environment?.SNARF_X_CT0).toBe("<redacted>");
     expect(JSON.stringify(status)).toContain(
       "wss://<redacted>:<redacted>@gateway.example/ws?token=<redacted>",
     );
