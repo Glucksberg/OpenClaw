@@ -184,6 +184,7 @@ async function executeJobCoreWithTimeoutUnfinalized(
     const result: CronCoreRunOutcome = {
       status: "error",
       error,
+      executionStarted: execution !== undefined,
       // The abort race must retain attribution already reported by the runner.
       ...(execution && {
         provider: execution.provider,

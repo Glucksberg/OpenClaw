@@ -225,6 +225,31 @@ describe("resolveCronExecutionRetryHint", () => {
     ).toEqual({ retryable: false });
   });
 
+  it("does not retry scheduler hard timeouts after execution starts", () => {
+    for (const error of [
+      "cron: job execution timed out",
+      "cron: job execution timed out (last phase: tool-execution-started)",
+    ]) {
+      expect(
+        resolveCronExecutionRetryHint({
+          error,
+          retryOn: ["timeout"],
+          executionStarted: true,
+        }),
+      ).toEqual({ retryable: false });
+    }
+  });
+
+  it("keeps other transient post-execution failures eligible for bounded retry", () => {
+    expect(
+      resolveCronExecutionRetryHint({
+        error: "fetch failed: ECONNRESET",
+        retryOn: ["network"],
+        executionStarted: true,
+      }),
+    ).toEqual({ retryable: true, category: "network" });
+  });
+
   it("does not classify archived-session work-start errors as transient", () => {
     expect(
       resolveCronExecutionRetryHint({
