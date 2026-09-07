@@ -150,7 +150,8 @@ describe("bounded cron health monitor", () => {
     ["missing", (lines: string[]) => lines.slice(1), "critical", "schedule_missing"],
     [
       "drifted",
-      (lines: string[]) => [lines[0].replace("0 * * * *", "1 * * * *"), ...lines.slice(1)],
+      (lines: string[]) =>
+        lines.map((line, index) => (index === 0 ? line.replace("0 * * * *", "1 * * * *") : line)),
       "critical",
       "schedule_drift",
     ],

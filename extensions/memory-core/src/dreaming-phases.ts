@@ -1571,7 +1571,7 @@ export async function runDreamingSweepPhase(params: {
   agentId?: string;
   workspaceDir: string;
   pluginConfig?: Record<string, unknown>;
-  cfg?: DreamingHostConfig;
+  cfg?: OpenClawConfig;
   logger: Logger;
   subagent?: DreamNarrativeRequest["subagent"];
   nowMs?: number;
