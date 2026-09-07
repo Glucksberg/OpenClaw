@@ -39,6 +39,7 @@ import { resolveDefaultAgentWorkspaceDir } from "../../agents/workspace.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { buildModelPanel } from "../../model-picker/model-panel.js";
 import { resolveAgentRuntimeLabel } from "../../status/agent-runtime-label.js";
 import type { ReplyPayload } from "../types.js";
 import { rejectUnauthorizedCommand } from "./command-gates.js";
@@ -50,7 +51,7 @@ const MODELS_ADD_DEPRECATED_TEXT =
   "⚠️ /models add is deprecated. Use /models to browse providers and /model to switch models.";
 
 type ModelsCommandSessionEntry = Partial<
-  Pick<SessionEntry, "authProfileOverride" | "modelProvider" | "model">
+  Pick<SessionEntry, "authProfileOverride" | "modelProvider" | "model" | "thinkingLevel">
 >;
 
 export type ModelsProviderData = {
@@ -568,7 +569,7 @@ export async function resolveModelsCommandReply(params: {
   const argText = body.replace(/^\/models\b/i, "").trim();
   const parsed = parseModelsArgs(argText);
 
-  const { byProvider, providers, modelNames } = await buildModelsProviderData(
+  const { byProvider, providers, modelNames, resolvedDefault } = await buildModelsProviderData(
     params.cfg,
     params.agentId,
     {
@@ -578,6 +579,24 @@ export async function resolveModelsCommandReply(params: {
   );
   const commandPlugin = params.surface ? getChannelPlugin(params.surface) : null;
   const providerInfos = buildProviderInfos({ providers, byProvider });
+
+  if (!argText && commandPlugin?.commands?.buildModelPanelChannelData) {
+    const current = params.currentModel;
+    const separator = current?.indexOf("/") ?? -1;
+    const panel = buildModelPanel({
+      cfg: params.cfg,
+      provider: current && separator > 0 ? current.slice(0, separator) : resolvedDefault.provider,
+      model: current && separator > 0 ? current.slice(separator + 1) : resolvedDefault.model,
+      defaultProvider: resolvedDefault.provider,
+      defaultModel: resolvedDefault.model,
+      agentId: params.agentId ?? "main",
+      sessionEntry: params.sessionEntry,
+    });
+    const panelChannelData = commandPlugin.commands.buildModelPanelChannelData(panel.controls);
+    if (panelChannelData) {
+      return { text: panel.text, channelData: panelChannelData };
+    }
+  }
 
   if (parsed.action === "providers") {
     const channelData =

@@ -389,7 +389,12 @@ Direct owner/admin `/model <model>` requests **default scope**: it changes this 
 On Discord, `/model` and `/models` open an interactive picker with provider and
 model dropdowns and follow the direct command flow. Owner/admin submissions
 request a best-effort configured-default update. Telegram callback-picker
-selections are session-only. The picker respects `agents.defaults.modelPolicy.allow`,
+selections are session-only. On Telegram, `/model` opens one session panel with
+**Change model**, **Details**, and **Use agent default**. Navigation and selection
+update the same message. Details explain the session scope without displaying auth
+profiles or endpoints. Bare `/models` opens the same panel; `/models <provider>`
+and other existing arguments still browse the catalog. Only `/model` is advertised
+in the Telegram command menu, but both commands remain accepted. The picker respects `agents.defaults.modelPolicy.allow`,
 including `provider/*` entries. Without an explicit allowlist, model entries and
 aliases do not restrict selection.
 

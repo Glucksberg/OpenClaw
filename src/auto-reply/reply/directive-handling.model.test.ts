@@ -900,6 +900,28 @@ describe("/model chat UX", () => {
     },
   );
 
+  it("renders the opt-in session panel with effective thinking and safe actions", async () => {
+    pluginPolicyMock.channels.set("telegram", {
+      id: "telegram",
+      commands: { buildModelPanelChannelData: (controls) => ({ telegram: { controls } }) },
+    });
+    const reply = await resolveModelInfoReply({ surface: "telegram" });
+    expect(reply?.text).toContain("Session model");
+    expect(reply?.text).toContain("Agent default:");
+    expect(reply?.text).toContain("Think: medium");
+    expect(reply?.channelData).toMatchObject({
+      telegram: {
+        controls: [
+          [
+            { text: "Change model", action: "providers" },
+            { text: "Details", action: "details" },
+          ],
+          [{ text: "Use agent default", action: "default" }],
+        ],
+      },
+    });
+  });
+
   it("includes the thinking level in channel-specific model summaries", async () => {
     pluginPolicyMock.channels.set("telegram", {
       id: "telegram",

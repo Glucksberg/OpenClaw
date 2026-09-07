@@ -16,6 +16,7 @@ import type {
   PluginApprovalRequest,
   PluginApprovalResolved,
 } from "../../infra/plugin-approvals.js";
+import type { ModelPanelControl } from "../../model-picker/model-panel.js";
 import type { ResolvedAgentRoute } from "../../routing/resolve-route.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import type { ResolverContext, SecretDefaults } from "../../secrets/runtime-shared.js";
@@ -453,6 +454,10 @@ export type ChannelCommandAdapter = {
     modelNames?: ReadonlyMap<string, string>;
   }) => ReplyPayload["channelData"] | null;
   buildModelBrowseChannelData?: () => ReplyPayload["channelData"] | null;
+  /** Opts into the command-owned session model panel without changing text command semantics. */
+  buildModelPanelChannelData?: (
+    controls: ModelPanelControl[][],
+  ) => ReplyPayload["channelData"] | null;
 };
 
 export type ChannelDoctorConfigMutation = {

@@ -25,6 +25,7 @@ import { resolveEffectiveAgentRuntime } from "../../agents/thinking-runtime.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { buildModelPanel } from "../../model-picker/model-panel.js";
 import { shortenHomePath } from "../../utils.js";
 import { resolveSelectedAndActiveModel } from "../model-runtime.js";
 import { resolveSupportedThinkingLevel } from "../thinking.js";
@@ -412,6 +413,22 @@ export async function maybeHandleModelDirectiveInfo(params: {
       ? `Active: ${modelRefs.active.label} (runtime)`
       : null;
     const commandPlugin = params.surface ? getChannelPlugin(params.surface) : null;
+    if (commandPlugin?.commands?.buildModelPanelChannelData) {
+      const panel = buildModelPanel({
+        cfg: params.cfg,
+        provider: params.provider,
+        model: params.model,
+        defaultProvider: params.defaultProvider,
+        defaultModel: params.defaultModel,
+        agentId: params.activeAgentId,
+        thinking: effectiveThinkLevel,
+        sessionEntry: params.sessionEntry,
+      });
+      const panelChannelData = commandPlugin.commands.buildModelPanelChannelData(panel.controls);
+      if (panelChannelData) {
+        return { text: panel.text, channelData: panelChannelData };
+      }
+    }
     const channelData = commandPlugin?.commands?.buildModelBrowseChannelData?.();
     if (channelData) {
       return {

@@ -4,6 +4,7 @@ import type { ResolvedTelegramAccount } from "./accounts.js";
 import {
   buildTelegramCommandsListChannelData,
   buildTelegramModelBrowseChannelData,
+  buildTelegramModelPanelChannelData,
   buildTelegramModelsAddProviderChannelData,
   buildTelegramModelsListChannelData,
   buildTelegramModelsMenuChannelData,
@@ -42,6 +43,7 @@ export function createTelegramPluginBase(params: {
       buildModelsAddProviderChannelData: buildTelegramModelsAddProviderChannelData,
       buildModelsListChannelData: buildTelegramModelsListChannelData,
       buildModelBrowseChannelData: buildTelegramModelBrowseChannelData,
+      buildModelPanelChannelData: buildTelegramModelPanelChannelData,
     },
     doctor: telegramDoctor,
     security: telegramSecurityAdapter,

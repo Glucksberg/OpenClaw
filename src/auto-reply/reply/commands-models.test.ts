@@ -319,6 +319,32 @@ function preparedAuthCheckerParams() {
 }
 
 describe("handleModelsCommand", () => {
+  it("opens the opt-in panel only for bare /models and preserves browse arguments", async () => {
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "panel",
+          source: "test",
+          plugin: {
+            ...createChannelTestPluginBase({ id: "panel" }),
+            commands: { buildModelPanelChannelData: (controls) => ({ panel: { controls } }) },
+          },
+        },
+      ]),
+    );
+    const params = buildParams("/models");
+    params.ctx.Surface = "panel";
+    params.sessionEntry = { sessionId: "panel", updatedAt: 1, thinkingLevel: "high" };
+    const panel = await handleModelsCommand(params, true);
+    expect(panel?.reply?.text).toContain("Session model");
+    expect(panel?.reply?.text).toContain("Think: high");
+    expect(panel?.reply?.channelData).toBeDefined();
+    params.command.commandBodyNormalized = "/models anthropic";
+    const list = await handleModelsCommand(params, true);
+    expect(list?.reply?.text).toContain("Models (anthropic)");
+    expect(list?.reply?.text).not.toContain("Session model");
+    expect(list?.reply?.channelData).toBeUndefined();
+  });
   it("shows a simple providers menu on text surfaces", async () => {
     const result = await handleModelsCommand(buildParams("/models"), true);
 

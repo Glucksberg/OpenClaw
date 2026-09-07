@@ -1,3 +1,4 @@
+import { expectDefined } from "openclaw/plugin-sdk/expect-runtime";
 /**
  * Telegram inline button utilities for model selection.
  *
@@ -8,7 +9,10 @@
  * - mdl_sel/{model}       - select model (compact fallback when standard is >64 bytes)
  * - mdl_back              - back to providers list
  */
-import { expectDefined } from "openclaw/plugin-sdk/expect-runtime";
+import type {
+  ModelPanelAction,
+  ModelPanelControl,
+} from "openclaw/plugin-sdk/model-session-runtime";
 import { parseStrictPositiveInteger } from "openclaw/plugin-sdk/number-runtime";
 import { sliceUtf16Safe } from "openclaw/plugin-sdk/text-utility-runtime";
 import { fitsTelegramCallbackData } from "./approval-callback-data.js";
@@ -16,6 +20,7 @@ import { fitsTelegramCallbackData } from "./approval-callback-data.js";
 export type ButtonRow = Array<{ text: string; callback_data: string }>;
 
 export type ParsedModelCallback =
+  | { type: "panel"; action: ModelPanelAction }
   | { type: "providers" }
   | { type: "list"; provider: string; page: number }
   | { type: "select"; provider?: string; model: string }
@@ -66,6 +71,17 @@ export function parseModelCallbackData(data: string): ParsedModelCallback | null
     return { type: trimmed === CALLBACK_PREFIX.providers ? "providers" : "back" };
   }
 
+  const panelAction = trimmed.slice("mdl_panel_".length);
+  if (
+    trimmed.startsWith("mdl_panel_") &&
+    (panelAction === "home" ||
+      panelAction === "details" ||
+      panelAction === "default" ||
+      panelAction === "providers")
+  ) {
+    return { type: "panel", action: panelAction };
+  }
+
   // mdl_list_{provider}_{page}
   const listMatch = trimmed.match(/^mdl_list_([a-z0-9_.-]+)_(\d+)$/i);
   if (listMatch) {
@@ -105,6 +121,15 @@ export function parseModelCallbackData(data: string): ParsedModelCallback | null
   }
 
   return null;
+}
+
+export function buildModelPanelKeyboard(controls: ModelPanelControl[][]): ButtonRow[] {
+  return controls.map((row) =>
+    row.map((control) => ({
+      text: control.text,
+      callback_data: `mdl_panel_${control.action}`,
+    })),
+  );
 }
 
 export function buildModelSelectionCallbackData(params: {

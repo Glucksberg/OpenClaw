@@ -3,7 +3,12 @@ import type { Context } from "grammy";
 import { parseExecApprovalCommandText } from "openclaw/plugin-sdk/approval-reply-runtime";
 import { buildCommandsMessagePaginated } from "openclaw/plugin-sdk/command-status";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
-import { applySessionModelSelection } from "openclaw/plugin-sdk/model-session-runtime";
+import {
+  applySessionModelSelection,
+  buildModelPanel,
+  formatModelPanelSelection,
+  MODEL_PANEL_NAVIGATION,
+} from "openclaw/plugin-sdk/model-session-runtime";
 import { formatModelsAvailableHeader } from "openclaw/plugin-sdk/models-provider-runtime";
 import { parseStrictPositiveInteger } from "openclaw/plugin-sdk/number-runtime";
 import { danger, logVerbose } from "openclaw/plugin-sdk/runtime-env";
@@ -50,6 +55,7 @@ import { buildCommandsPaginationKeyboard, buildTelegramModelsMenuButtons } from 
 import { resolveTelegramInlineButtonsScope } from "./inline-buttons.js";
 import {
   buildModelsKeyboard,
+  buildModelPanelKeyboard,
   calculateTotalPages,
   getModelsPageSize,
   parseModelCallbackData,
@@ -516,21 +522,52 @@ async function handleTelegramModelCallback(params: {
     return { sessionState: session, modelData: providerData };
   });
   const { byProvider, providers, modelNames, resolvedDefault: activeResolvedDefault } = modelData;
+  const resolvedDefault = resolveDefaultModelForAgent({
+    cfg: runtimeCfg,
+    agentId: sessionState.agentId,
+  });
+  const navigation = buildModelPanelKeyboard(MODEL_PANEL_NAVIGATION);
+  if (
+    modelCallback.type === "panel" &&
+    (modelCallback.action === "home" || modelCallback.action === "details")
+  ) {
+    const current = sessionState.model;
+    const separator = current?.indexOf("/") ?? -1;
+    const panel = buildModelPanel({
+      cfg: runtimeCfg,
+      provider:
+        current && separator > 0 ? current.slice(0, separator) : activeResolvedDefault.provider,
+      model: current && separator > 0 ? current.slice(separator + 1) : activeResolvedDefault.model,
+      defaultProvider: activeResolvedDefault.provider,
+      defaultModel: activeResolvedDefault.model,
+      agentId: sessionState.agentId,
+      sessionEntry: sessionState.sessionEntry,
+      details: modelCallback.action === "details",
+    });
+    await retryModelAction(() =>
+      editMessageWithButtons(panel.text, buildModelPanelKeyboard(panel.controls)),
+    );
+    return true;
+  }
   const providerInfos: ProviderInfo[] = providers.map((provider) => ({
     id: provider,
     count: byProvider.get(provider)?.size ?? 0,
   }));
 
-  if (modelCallback.type === "providers" || modelCallback.type === "back") {
+  if (
+    modelCallback.type === "providers" ||
+    modelCallback.type === "back" ||
+    (modelCallback.type === "panel" && modelCallback.action === "providers")
+  ) {
     if (providers.length === 0) {
       await retryModelAction(() => editMessageWithButtons("No providers available.", []));
       return true;
     }
     await retryModelAction(() =>
-      editMessageWithButtons(
-        "Select a provider:",
-        buildTelegramModelsMenuButtons({ providers: providerInfos }),
-      ),
+      editMessageWithButtons("Select a provider:", [
+        ...buildTelegramModelsMenuButtons({ providers: providerInfos }),
+        ...navigation,
+      ]),
     );
     return true;
   }
@@ -540,10 +577,10 @@ async function handleTelegramModelCallback(params: {
     const modelSet = byProvider.get(provider);
     if (!modelSet || modelSet.size === 0) {
       await retryModelAction(() =>
-        editMessageWithButtons(
-          `Unknown provider: ${provider}\n\nSelect a provider:`,
-          buildTelegramModelsMenuButtons({ providers: providerInfos }),
-        ),
+        editMessageWithButtons(`Unknown provider: ${provider}\n\nSelect a provider:`, [
+          ...buildTelegramModelsMenuButtons({ providers: providerInfos }),
+          ...navigation,
+        ]),
       );
       return true;
     }
@@ -569,19 +606,29 @@ async function handleTelegramModelCallback(params: {
       agentDir: resolveAgentDir(runtimeCfg, sessionState.agentId),
       sessionEntry: sessionState.sessionEntry,
     });
-    await retryModelAction(() => editMessageWithButtons(text, buttons));
+    await retryModelAction(() => editMessageWithButtons(text, [...buttons, ...navigation]));
     return true;
   }
 
-  if (modelCallback.type !== "select") {
+  if (
+    modelCallback.type !== "select" &&
+    !(modelCallback.type === "panel" && modelCallback.action === "default")
+  ) {
     return true;
   }
-  const selection = resolveModelSelection({ callback: modelCallback, providers, byProvider });
+  const selection =
+    modelCallback.type === "panel"
+      ? {
+          kind: "resolved" as const,
+          provider: resolvedDefault.provider,
+          model: resolvedDefault.model,
+        }
+      : resolveModelSelection({ callback: modelCallback, providers, byProvider });
   if (selection.kind !== "resolved") {
     await retryModelAction(() =>
       editMessageWithButtons(
         `Could not resolve model "${selection.model}".\n\nSelect a provider:`,
-        buildTelegramModelsMenuButtons({ providers: providerInfos }),
+        [...buildTelegramModelsMenuButtons({ providers: providerInfos }), ...navigation],
       ),
     );
     return true;
@@ -598,10 +645,6 @@ async function handleTelegramModelCallback(params: {
 
   try {
     const storePath = telegramDeps.resolveStorePath(runtimeCfg.session?.store, {
-      agentId: sessionState.agentId,
-    });
-    const resolvedDefault = resolveDefaultModelForAgent({
-      cfg: runtimeCfg,
       agentId: sessionState.agentId,
     });
     const isDefaultSelection =
@@ -666,21 +709,17 @@ async function handleTelegramModelCallback(params: {
           ? "Compatible auth profile retained."
           : "Incompatible auth profile cleared."
         : undefined;
-    const escapeHtml = (text: string) =>
-      text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const actionText = isDefaultSelection
-      ? "reset to default"
-      : `changed to <b>${escapeHtml(selection.provider)}/${escapeHtml(selection.model)}</b>`;
-    const runtimeText =
-      applied.runtimeChange?.kind === "clear"
-        ? "Runtime reset to configured policy."
-        : "Runtime unchanged.";
-    const scopeText = isDefaultSelection
-      ? `Session model selection cleared.${defaultAuthProfileNotice ? ` ${defaultAuthProfileNotice}` : ""} ${runtimeText} New replies use the agent's configured default.`
-      : `Session-only model selection. ${runtimeText} Use /model ${escapeHtml(selection.provider)}/${escapeHtml(selection.model)} --runtime &lt;runtime&gt; -s to switch harnesses. The agent default in openclaw.json is unchanged. This chat keeps the model selection across /new and /reset; use /model default -s to clear the session model selection.`;
-    await editMessageWithButtons(`✅ Model ${actionText}\n\n${scopeText}`, [], {
-      parse_mode: "HTML",
-    });
+    await editMessageWithButtons(
+      formatModelPanelSelection({
+        provider: selection.provider,
+        model: selection.model,
+        isDefault: isDefaultSelection,
+        authNotice: defaultAuthProfileNotice,
+        runtimeReset: applied.runtimeChange?.kind === "clear",
+        pending: sessionStore[sessionState.sessionKey]?.liveModelSwitchPending === true,
+      }),
+      navigation,
+    );
   } catch (err) {
     if (err instanceof TelegramRetryableCallbackError) {
       throw err;

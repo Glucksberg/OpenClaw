@@ -98,6 +98,14 @@ function listNativeSpecsFromCommands(
   options?: NativeCommandProviderLookupOptions,
 ): NativeCommandSpec[] {
   const mapNativeCommandNames = createNativeCommandNameMapper(provider, options);
+  const modelPanelEnabled = provider
+    ? Boolean(
+        (options?.includeBundledChannelFallback === false
+          ? getLoadedChannelPlugin(provider)
+          : getChannelPlugin(provider)
+        )?.commands?.buildModelPanelChannelData,
+      )
+    : false;
   return commands
     .filter(
       (command) =>
@@ -109,6 +117,7 @@ function listNativeSpecsFromCommands(
           name,
           description: command.description,
           acceptsArgs: Boolean(command.acceptsArgs),
+          ...(modelPanelEnabled && command.key === "models" ? { hiddenFromMenu: true } : {}),
         };
         // Native aliases carry the same payload shape but are marked for channel registration.
         if (index > 0) {

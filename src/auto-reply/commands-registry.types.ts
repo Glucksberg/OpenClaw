@@ -85,6 +85,8 @@ export type ChatCommandDefinition = {
 
 /** Provider-facing native command registration shape. */
 export type NativeCommandSpec = {
+  /** Keep accepting the command without advertising a second entry point. */
+  hiddenFromMenu?: boolean;
   name: string;
   description: string;
   descriptionLocalizations?: Record<string, string>;

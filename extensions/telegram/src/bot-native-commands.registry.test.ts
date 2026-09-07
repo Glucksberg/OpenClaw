@@ -152,6 +152,17 @@ function mockCall(mock: { mock: { calls: unknown[][] } }, index: number): unknow
 }
 
 describe("registerTelegramNativeCommands real plugin registry", () => {
+  it("advertises one model command while retaining both native handlers", async () => {
+    const plugin = activePluginRegistry.channels[0]!.plugin;
+    plugin.commands = { ...plugin.commands, buildModelPanelChannelData: () => ({ telegram: {} }) };
+    const { bot, setMyCommands, commandHandlers } = createCommandBot();
+    registerTelegramNativeCommands({ ...createNativeCommandTestParams({}), bot });
+    const commands = await waitForRegisteredCommands(setMyCommands);
+    expect(commands.some((command) => command.command === "model")).toBe(true);
+    expect(commands.some((command) => command.command === "models")).toBe(false);
+    expect(commandHandlers.has("model")).toBe(true);
+    expect(commandHandlers.has("models")).toBe(true);
+  });
   beforeAll(async () => {
     resetPluginRuntimeStateForTest();
     activePluginRegistry = createTelegramPluginRegistry();

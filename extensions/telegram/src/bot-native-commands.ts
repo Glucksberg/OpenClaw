@@ -145,6 +145,9 @@ export const registerTelegramNativeCommands = ({
     : 0;
   const nativeMenuCommands = nativeCommands
     .map((command, index): TelegramMenuCommand | null => {
+      if (command.hiddenFromMenu) {
+        return null;
+      }
       const normalized = normalizeTelegramCommandName(command.name);
       if (!TELEGRAM_COMMAND_NAME_PATTERN.test(normalized)) {
         runtime.error?.(

@@ -41,6 +41,20 @@ approval, command, URL, web-app, question, callback, and model-picker actions
 distinguishable until that encoding boundary; never infer picker intent from a
 raw callback string. Actor and source-message checks remain channel-owned.
 
+### Session model command panel
+
+The optional `commands.buildModelPanelChannelData(controls)` hook opts a channel
+into the command-owned `/model` panel and makes bare `/models` an alternate entry
+point. Other `/models` arguments and text-only channels keep their existing behavior.
+`model-session-runtime` exports `buildModelPanel`, `formatModelPanelSelection`,
+`MODEL_PANEL_NAVIGATION`, and the typed `ModelPanelAction` and `ModelPanelControl`
+contracts. The channel renders the supplied controls and
+encodes their actions; it must reauthorize callbacks and resolve the current target
+session before reading or changing it. The `default` action clears only the session
+selection through `applySessionModelSelection`, never configured defaults.
+Native catalogs mark redundant entries with `hiddenFromMenu`; omit those entries
+from published menus without removing their command handlers.
+
 ## Message adapter
 
 Expose a `message` adapter with `defineChannelMessageAdapter` from

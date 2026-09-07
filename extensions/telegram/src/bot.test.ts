@@ -13,6 +13,7 @@ import {
 import { createNonExitingRuntimeEnv } from "openclaw/plugin-sdk/plugin-test-runtime";
 import type { MsgContext } from "openclaw/plugin-sdk/reply-runtime";
 import {
+  getSessionEntry,
   listSessionEntries,
   normalizeSessionDeliveryState,
   upsertSessionEntry,
@@ -1653,42 +1654,45 @@ describe("createTelegramBot", () => {
     expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-authz-bypass-1");
   });
 
-  it("blocks group model-selection callbacks for senders who are not authorized for /models", async () => {
-    const storePath = createTelegramTestStorePath("group-model-authz");
-    const config = makeModelPickerConfig(storePath, {
-      config: { commands: { allowFrom: { telegram: ["9"] } } },
-      telegram: {
-        dmPolicy: "open",
-        capabilities: { inlineButtons: "group" },
-        groupPolicy: "open",
-        groups: { "*": { requireMention: false } },
-      },
-    });
-
-    loadConfig.mockReturnValue(config);
-    createTelegramBot({
-      token: "tok",
-      config,
-    });
-    const callbackHandler = getTelegramCallbackHandlerForTests();
-
-    await callbackHandler(
-      createTelegramCallbackContext({
-        id: "cbq-group-model-authz-1",
-        data: "mdl_sel_openai/gpt-5.4",
-        from: { id: 999, first_name: "Mallory", username: "mallory" },
-        message: {
-          chat: { id: -100999, type: "supergroup", title: "Test Group" },
-          message_id: 21,
+  it.each(["mdl_sel_openai/gpt-5.4", "mdl_panel_default", "mdl_panel_details"])(
+    "blocks unauthorized group model callbacks: %s",
+    async (callbackData) => {
+      const storePath = createTelegramTestStorePath("group-model-authz");
+      const config = makeModelPickerConfig(storePath, {
+        config: { commands: { allowFrom: { telegram: ["9"] } } },
+        telegram: {
+          dmPolicy: "open",
+          capabilities: { inlineButtons: "group" },
+          groupPolicy: "open",
+          groups: { "*": { requireMention: false } },
         },
-      }),
-    );
+      });
 
-    expect(replySpy).not.toHaveBeenCalled();
-    expect(editMessageTextSpy).not.toHaveBeenCalled();
-    expect(listSessionEntries({ storePath })).toStrictEqual([]);
-    expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-group-model-authz-1");
-  });
+      loadConfig.mockReturnValue(config);
+      createTelegramBot({
+        token: "tok",
+        config,
+      });
+      const callbackHandler = getTelegramCallbackHandlerForTests();
+
+      await callbackHandler(
+        createTelegramCallbackContext({
+          id: "cbq-group-model-authz-1",
+          data: callbackData,
+          from: { id: 999, first_name: "Mallory", username: "mallory" },
+          message: {
+            chat: { id: -100999, type: "supergroup", title: "Test Group" },
+            message_id: 21,
+          },
+        }),
+      );
+
+      expect(replySpy).not.toHaveBeenCalled();
+      expect(editMessageTextSpy).not.toHaveBeenCalled();
+      expect(listSessionEntries({ storePath })).toStrictEqual([]);
+      expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-group-model-authz-1");
+    },
+  );
 
   it("recomputes group model-selection callback auth from runtime command config", async () => {
     const storePath = createTelegramTestStorePath("group-model-authz-runtime");
@@ -2559,7 +2563,7 @@ describe("createTelegramBot", () => {
     {
       name: "resets overrides when selecting the configured default model",
       callbackId: "cbq-model-default-1",
-      callbackData: "mdl_sel_anthropic/claude-opus-4-6",
+      callbackData: "mdl_panel_default",
       defaultModel: "claude-opus-4-6",
       configuredModels: { "anthropic/claude-opus-4-6": {} },
       messageId: 16,
@@ -2588,11 +2592,9 @@ describe("createTelegramBot", () => {
       expect(replySpy).not.toHaveBeenCalled();
       expect(editMessageTextSpy).toHaveBeenCalledTimes(1);
       expect(String(firstEditMessageTextArg(2))).toContain(
-        `${CHECK_MARK_EMOJI} Model reset to default`,
+        `${CHECK_MARK_EMOJI} Session selection cleared; using the agent default.`,
       );
-      expect(String(firstEditMessageTextArg(2))).toContain(
-        "Session model selection cleared. Runtime unchanged. New replies use the agent's configured default.",
-      );
+      expect(String(firstEditMessageTextArg(2))).toContain("Configured defaults are unchanged.");
 
       const entry = readOnlySessionEntry(storePath);
       expect(entry?.providerOverride).toBeUndefined();
@@ -2646,7 +2648,7 @@ describe("createTelegramBot", () => {
     expect(entry?.modelOverride).toBeUndefined();
     expect(entry?.agentRuntimeOverride).toBeUndefined();
     expect(String(firstEditMessageTextArg(2))).toBe(
-      `${CHECK_MARK_EMOJI} Model reset to default\n\nSession model selection cleared. Runtime reset to configured policy. New replies use the agent's configured default.`,
+      `${CHECK_MARK_EMOJI} Session selection cleared; using the agent default.\nConfigured defaults are unchanged.\nPending: applies at the next clean retry point.\nRuntime reset to configured policy.`,
     );
   });
 
@@ -2769,7 +2771,7 @@ describe("createTelegramBot", () => {
           expect(entry?.modelOverride).toBeUndefined();
           const confirmation = String(firstEditMessageTextArg(2));
           expect(confirmation).toBe(
-            `${CHECK_MARK_EMOJI} Model reset to default\n\nSession model selection cleared. ${outcomeText} Runtime unchanged. New replies use the agent's configured default.`,
+            `${CHECK_MARK_EMOJI} Session selection cleared; using the agent default.\nConfigured defaults are unchanged.\nPending: applies at the next clean retry point.\n${outcomeText}`,
           );
           expect(confirmation).not.toContain("team:prod");
         }
@@ -2825,11 +2827,17 @@ describe("createTelegramBot", () => {
       [{ text: "GPT 4.1 Bridge", callback_data: "mdl_sel_openai/gpt-4.1" }],
       [{ text: "GPT Five Bridge ✓", callback_data: "mdl_sel_openai/gpt-5" }],
       [{ text: "<< Back", callback_data: "mdl_back" }],
+      [
+        { text: "Change model", callback_data: "mdl_panel_providers" },
+        { text: "Back to panel", callback_data: "mdl_panel_home" },
+      ],
     ]);
     expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-display-names-1");
   });
 
-  it("formats non-default model selection confirmations with Telegram HTML parse mode", async () => {
+  it("confirms session-only selection in place with panel navigation", async () => {
+    // Exercise read-after-write against the same authoritative store, not the harness snapshot.
+    vi.mocked(telegramBotDepsForTest.getSessionEntry!).mockImplementation(getSessionEntry);
     const storePath = createTelegramTestStorePath("model-html");
     const config = makeModelPickerConfig(storePath);
 
@@ -2854,15 +2862,43 @@ describe("createTelegramBot", () => {
     expect(editCall[0]).toBe(1234);
     expect(editCall[1]).toBe(17);
     expect(editCall[2]).toBe(
-      `${CHECK_MARK_EMOJI} Model changed to <b>openai/gpt-5.4</b>\n\nSession-only model selection. Runtime unchanged. Use /model openai/gpt-5.4 --runtime &lt;runtime&gt; -s to switch harnesses. The agent default in openclaw.json is unchanged. This chat keeps the model selection across /new and /reset; use /model default -s to clear the session model selection.`,
+      `${CHECK_MARK_EMOJI} Session model changed to openai/gpt-5.4.\nConfigured defaults are unchanged.\nPending: applies at the next clean retry point.`,
     );
-    expect(requireRecord(editCall[3], "edit params").parse_mode).toBe("HTML");
+    expect(requireRecord(editCall[3], "edit params")).toMatchObject({
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "Change model", callback_data: "mdl_panel_providers" },
+            { text: "Back to panel", callback_data: "mdl_panel_home" },
+          ],
+        ],
+      },
+    });
 
     const entry = readOnlySessionEntry(storePath);
     expect(entry?.providerOverride).toBe("openai");
     expect(entry?.modelOverride).toBe("gpt-5.4");
     expect(entry?.modelOverrideSource).toBe("user");
     expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-html-1");
+    for (const action of ["home", "details", "providers"] as const) {
+      await callbackHandler(
+        createTelegramCallbackContext({
+          id: `cbq-panel-${action}`,
+          data: `mdl_panel_${action}`,
+          message: { message_id: 17 },
+        }),
+      );
+      const call = editMessageTextSpy.mock.calls.at(-1)!;
+      expect(call.slice(0, 2)).toEqual([1234, 17]);
+      if (action !== "providers") {
+        expect(call[2]).toContain("Selected: openai/gpt-5.4");
+        expect(call[2]).not.toContain("Auth store:");
+      } else {
+        expect(call[2]).toBe("Select a provider:");
+      }
+    }
+    expect(replySpy).not.toHaveBeenCalled();
+    expect(readOnlySessionEntry(storePath)?.modelOverride).toBe("gpt-5.4");
   });
 
   it("keeps hot-reloaded model pins on the next assembled turn", async () => {

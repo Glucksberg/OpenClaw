@@ -1,7 +1,9 @@
 // Telegram plugin module implements command ui behavior.
+import type { ModelPanelControl } from "openclaw/plugin-sdk/model-session-runtime";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
 import {
   buildBrowseProvidersButton,
+  buildModelPanelKeyboard,
   buildModelsKeyboard,
   buildProviderKeyboard,
   type ProviderInfo,
@@ -120,6 +122,12 @@ export function buildTelegramModelsListChannelData(params: {
       buttons: buildModelsKeyboard(params),
     },
   };
+}
+
+export function buildTelegramModelPanelChannelData(
+  controls: ModelPanelControl[][],
+): ReplyPayload["channelData"] {
+  return { telegram: { buttons: buildModelPanelKeyboard(controls) } };
 }
 
 export function buildTelegramModelBrowseChannelData(): ReplyPayload["channelData"] {
