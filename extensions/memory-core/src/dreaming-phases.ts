@@ -41,9 +41,9 @@ import {
   readMemoryCoreWorkspaceEntries,
   writeMemoryCoreWorkspaceEntries,
 } from "./dreaming-state.js";
+import type { DreamingPhase } from "./dreaming-sweep-budget.js";
 import { listMemorySessionTombstones } from "./memory-entry-origins.js";
 import { withMemoryWorkspaceLock } from "./memory-workspace-lock.js";
-import type { DreamingPhase } from "./dreaming-sweep-budget.js";
 import { textSimilarity as snippetSimilarity } from "./memory/tokenize.js";
 import {
   appendSessionCorpusLines,

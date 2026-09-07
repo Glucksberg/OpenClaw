@@ -67,9 +67,15 @@ async function main() {
   process.stdout.write(JSON.stringify({ status: "healed" }));
 }
 
-main().catch((error) => {
+/** @param {unknown} error */
+function handleMainError(error) {
   process.stdout.write(
-    JSON.stringify({ status: "failed", error: String(error?.message ?? error) }),
+    JSON.stringify({
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    }),
   );
   process.exitCode = 1;
-});
+}
+
+void main().catch(handleMainError);

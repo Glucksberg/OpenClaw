@@ -735,7 +735,6 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
         timezone: params.config.timezone,
         storage: params.config.storage ?? { mode: "separate", separateReports: false },
       });
-
     }
   } catch (error) {
     terminal = "degraded";

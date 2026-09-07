@@ -46,12 +46,12 @@ describe("required memory consolidation", () => {
       nowMs,
     });
     const subagent = {
-      run: vi.fn(async () => ({ runId: "run-1" })),
-      waitForRun: vi.fn(async () => ({ status: "error" })),
-      getSessionMessages: vi.fn(async () => ({ messages: [] })),
-      deleteSession: vi.fn(async () => undefined),
+      complete: vi.fn(async () => {
+        throw new Error("consolidation failed");
+      }),
     };
     const applied = await applyShortTermPromotions({
+      agentId: "main",
       workspaceDir,
       candidates,
       minScore: 0,
@@ -61,7 +61,7 @@ describe("required memory consolidation", () => {
       nowMs,
     });
 
-    expect(subagent.run).toHaveBeenCalledOnce();
+    expect(subagent.complete).toHaveBeenCalledOnce();
     expect(applied).toMatchObject({
       applied: 0,
       consolidationAttempted: true,

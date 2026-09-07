@@ -225,9 +225,9 @@ async function acquireRunLock(stateRoot) {
     });
     child.on("error", (error) => {
       clearTimeout(acquisitionTimer);
-      reject(error);
+      reject(error instanceof Error ? error : new Error(String(error)));
     });
-    exited.then(() => {
+    void exited.then(() => {
       clearTimeout(acquisitionTimer);
       if (acquired) {
         return;
@@ -271,7 +271,7 @@ function runBirdSearch(query, options = {}) {
       clearTimeout(timer);
       activeProcessGroups.delete(child.pid);
       if (error) {
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       } else {
         resolve(value);
       }
@@ -741,12 +741,15 @@ module.exports = {
   topics,
 };
 
+/** @param {unknown} error */
+function handleMainError(error) {
+  process.stdout.write(
+    `${JSON.stringify({ status: "partial", report: "🗞️ AI Pulse — bounded runner failed before completion.", cursor: 0, done: 0, remaining: topics.length, errors: [safeError(error)] })}\n`,
+  );
+  process.exitCode = 1;
+}
+
 if (require.main === module) {
   installSignalHandlers();
-  main().catch((error) => {
-    process.stdout.write(
-      `${JSON.stringify({ status: "partial", report: "🗞️ AI Pulse — bounded runner failed before completion.", cursor: 0, done: 0, remaining: topics.length, errors: [safeError(error)] })}\n`,
-    );
-    process.exitCode = 1;
-  });
+  void main().catch(handleMainError);
 }

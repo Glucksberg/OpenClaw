@@ -220,7 +220,7 @@ async function acquireRunLock(stateRoot) {
       });
     });
     child.on("error", reject);
-    exited.then(() => {
+    void exited.then(() => {
       clearTimeout(timer);
       if (acquired) {
         return;
@@ -669,12 +669,15 @@ module.exports = {
   statusFromOutput,
 };
 
+/** @param {unknown} error */
+function handleMainError(error) {
+  process.stdout.write(
+    `${JSON.stringify({ status: "partial", report: "OpenClaw health monitor failed before completion.", cursor: 0, done: 0, remaining: DEFAULT_PROBE_IDS.length, errors: [safeError(error)] })}\n`,
+  );
+  process.exitCode = 1;
+}
+
 if (require.main === module) {
   installSignalHandlers();
-  main().catch((error) => {
-    process.stdout.write(
-      `${JSON.stringify({ status: "partial", report: "OpenClaw health monitor failed before completion.", cursor: 0, done: 0, remaining: DEFAULT_PROBE_IDS.length, errors: [safeError(error)] })}\n`,
-    );
-    process.exitCode = 1;
-  });
+  void main().catch(handleMainError);
 }

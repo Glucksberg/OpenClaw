@@ -216,7 +216,9 @@ describe("runDreamNarrative", () => {
     const first = createDeferred<{ text: string }>();
     const second = createDeferred<{ text: string }>();
     const subagent = createCompletion();
-    subagent.complete.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+    subagent.complete
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
 
     await runDreamNarrative({
       agentId: "main",

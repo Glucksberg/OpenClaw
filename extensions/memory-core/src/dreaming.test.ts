@@ -21,9 +21,9 @@ import {
 } from "openclaw/plugin-sdk/system-event-runtime";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DreamingAdmission } from "./dreaming-admission.js";
-import { registerShortTermPromotionDreaming } from "./dreaming.js";
 import type { SingleDreamingPhaseResult } from "./dreaming-phases.js";
 import { configureMemoryCoreDreamingState } from "./dreaming-state.js";
+import { registerShortTermPromotionDreaming } from "./dreaming.js";
 import { createMemoryCoreTestHarness } from "./test-helpers.js";
 
 const probeDreamingAdmissionMock = vi.hoisted(() =>
