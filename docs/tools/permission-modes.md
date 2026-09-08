@@ -35,15 +35,17 @@ openclaw exec-policy show
 
 `tools.exec.mode` is the normalized policy surface for host `exec`. Each mode resolves to an underlying `security` (allowlist strictness) and `ask` (prompt-on-miss) pair:
 
-| Mode        | security / ask          | Behavior                                                                                      | Use when                                              |
-| ----------- | ----------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `deny`      | `deny` / `off`          | Block host exec entirely.                                                                     | No host commands are allowed.                         |
-| `allowlist` | `allowlist` / `off`     | Run only allowlisted commands; silently deny misses.                                          | You have a known-safe command set.                    |
-| `ask`       | `allowlist` / `on-miss` | Run allowlist matches; ask a human on misses.                                                 | A human should review every new command.              |
-| `auto`      | `allowlist` / `on-miss` | Run allowlist matches; send misses through auto-review before falling back to human approval. | Coding sessions need practical guarded access.        |
-| `full`      | `full` / `off`          | Run host exec without prompts.                                                                | This trusted host/session should skip approval gates. |
+| Mode        | security / ask          | Behavior                                                                                      | Use when                                                       |
+| ----------- | ----------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `deny`      | `deny` / `off`          | Block host exec entirely.                                                                     | No host commands are allowed.                                  |
+| `allowlist` | `allowlist` / `off`     | Run only allowlisted commands; silently deny misses.                                          | You have a known-safe command set.                             |
+| `ask`       | `allowlist` / `on-miss` | Run allowlist matches; ask a human on misses.                                                 | A human should review every new command.                       |
+| `auto`      | `allowlist` / `on-miss` | Run allowlist matches; send misses through auto-review before falling back to human approval. | Coding sessions need practical guarded access.                 |
+| `full`      | `full` / `off`          | Run host exec without ordinary policy prompts.                                                | This trusted host/session should skip ordinary approval gates. |
 
 `ask` and `auto` share the same allowlist/ask settings; `auto` additionally enables the native auto-reviewer, which decides misses itself and only defers to the configured human approval route when it cannot safely approve.
+
+`full` does not override approval-only hardening that you enable separately. In particular, [`tools.exec.strictInlineEval: true`](/tools/exec#inline-eval-strictinlineeval) still requires reviewer or explicit approval for inline interpreter-eval forms, including `sed` programs and commands such as `python -c` or `node -e`. Leave `strictInlineEval` unset or set it to `false` (the default) when `full` should also run those forms without prompts.
 
 For the full host exec policy, local approvals file, allowlist schema, safe bins, and forwarding behavior, see [Exec approvals](/tools/exec-approvals).
 
@@ -88,14 +90,14 @@ Use `approve-all` as the ACPX break-glass equivalent of a no-prompt harness sess
 
 ## Choosing a mode
 
-| Goal                                          | Configure                                                   |
-| --------------------------------------------- | ----------------------------------------------------------- |
-| Block host commands completely                | `tools.exec.mode: "deny"`                                   |
-| Let known-safe commands run only              | `tools.exec.mode: "allowlist"`                              |
-| Ask a human for every new command shape       | `tools.exec.mode: "ask"`                                    |
-| Use Codex/OpenClaw auto-review before humans  | `tools.exec.mode: "auto"`                                   |
-| Skip host exec approvals entirely             | `tools.exec.mode: "full"` plus matching host approvals file |
-| Make non-interactive ACPX sessions write/exec | `plugins.entries.acpx.config.permissionMode: "approve-all"` |
+| Goal                                          | Configure                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Block host commands completely                | `tools.exec.mode: "deny"`                                                                   |
+| Let known-safe commands run only              | `tools.exec.mode: "allowlist"`                                                              |
+| Ask a human for every new command shape       | `tools.exec.mode: "ask"`                                                                    |
+| Use Codex/OpenClaw auto-review before humans  | `tools.exec.mode: "auto"`                                                                   |
+| Skip host exec approvals entirely             | `tools.exec.mode: "full"` plus matching host approvals file, with `strictInlineEval: false` |
+| Make non-interactive ACPX sessions write/exec | `plugins.entries.acpx.config.permissionMode: "approve-all"`                                 |
 
 If a command still prompts or fails after changing mode, inspect both layers:
 

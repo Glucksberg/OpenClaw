@@ -128,7 +128,7 @@ Example:
 | `allowlist` | `allowlist` | `off`     | Only allowlisted/safe-bin commands run; nothing else is asked.                                                                 |
 | `ask`       | `allowlist` | `on-miss` | Allowlist matches run directly; everything else asks a human.                                                                  |
 | `auto`      | `allowlist` | `on-miss` | Allowlist/safe-bin matches run directly; everything else routes through OpenClaw's native auto reviewer before asking a human. |
-| `full`      | `full`      | `off`     | No approval gate.                                                                                                              |
+| `full`      | `full`      | `off`     | No ordinary policy approval gate; `strictInlineEval` remains approval-only when enabled.                                       |
 
 Use `/exec ask=always` with a message to require human approval for that run. It does not persist to later messages. Use [session permission modes](/gateway/permission-modes) for session-wide policy.
 
@@ -139,6 +139,8 @@ Codex app-server command approvals that are not already decided by explicit runt
 ### Inline eval (`strictInlineEval`)
 
 When `tools.exec.strictInlineEval` is `true`, inline interpreter-eval forms require reviewer or explicit approval: `python -c`, `node -e`, `ruby -e`, `perl -e`, `php -r`, `lua -e`, `osascript -e`, and similar forms across other supported interpreters and command carriers (`awk`, `find -exec`, `make`, `sed`, `xargs`, and more). In `mode=auto`, the normal exec approval path may let the native auto reviewer allow a clearly low-risk one-off command; direct node-host `system.run` calls still require an explicit approval because they cannot hand the command to a human approval route. If the reviewer asks, the request goes to a human. `allow-always` can still persist benign interpreter/script invocations, but inline-eval forms do not become durable allow rules.
+
+This opt-in restriction also applies in `mode=full`. Leave `strictInlineEval` unset or set it to `false` (the default) when full mode should run inline-eval forms without prompts.
 
 ### PATH handling
 

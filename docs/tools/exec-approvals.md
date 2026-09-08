@@ -284,6 +284,12 @@ To run host exec without approval prompts, open **both** policy layers:
 requested exec policy in OpenClaw config (`tools.exec.*`) **and**
 host-local approvals policy in the execution host approvals document.
 
+Separately enabled approval-only hardening still applies: with
+`tools.exec.strictInlineEval=true`, inline interpreter-eval forms require
+reviewer or explicit approval even when both policy layers resolve to
+`security=full` and `ask=off`. Leave `strictInlineEval` unset or set it to
+`false` (the default) for no-prompt execution of those forms.
+
 Omitted `askFallback` defaults to `deny`. Set host `askFallback` to `full`
 explicitly when a no-UI approval prompt should fall back to allow.
 
