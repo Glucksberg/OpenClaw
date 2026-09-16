@@ -16,6 +16,7 @@ import {
 } from "./sqlite-private-directory.js";
 import {
   adoptPreparedLocation,
+  reclaimAbandonedSqliteSnapshotStagingOnce,
   removeTempDirectory,
   removeTempDirectoryAsync,
 } from "./sqlite-readonly-location-cleanup.js";
@@ -335,7 +336,10 @@ function createStableReadOnlyCopyInTempDirectory(
 ): PreparedSqliteReadOnlyLocation {
   let tempDir = existingTempDir;
   try {
-    tempDir ??= createPrivateSqliteTempDirectorySync(stagingRoot, SQLITE_SNAPSHOT_STAGING_PREFIX);
+    if (!tempDir) {
+      reclaimAbandonedSqliteSnapshotStagingOnce(stagingRoot);
+      tempDir = createPrivateSqliteTempDirectorySync(stagingRoot, SQLITE_SNAPSHOT_STAGING_PREFIX);
+    }
     const snapshotPath = path.join(tempDir, "database.sqlite");
     const firstPath = path.join(tempDir, "first");
     if (process.platform !== "win32") {
@@ -393,6 +397,7 @@ export async function createSqliteSnapshotStagingDirectory(
   stagingRoot = resolvePrivateSqliteSnapshotStagingRoot(),
 ): Promise<string> {
   try {
+    reclaimAbandonedSqliteSnapshotStagingOnce(stagingRoot);
     return await createPrivateSqliteTempDirectory(stagingRoot, SQLITE_SNAPSHOT_STAGING_PREFIX);
   } catch (error) {
     throw sqliteSnapshotStagingError(stagingRoot, error, true);

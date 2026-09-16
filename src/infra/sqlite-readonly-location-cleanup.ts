@@ -6,6 +6,10 @@ import type { PreparedSqliteReadOnlyLocation } from "./sqlite-readonly-location.
 
 const pendingTempDirectoryCleanup = new Set<string>();
 let cleanupExitHandlerInstalled = false;
+// Staging directory names carry their creating PID, so a directory whose owner
+// is gone can no longer be read from and is safe to reclaim.
+const abandonedStagingEntry = /^openclaw-sqlite-readonly-(\d+)-/;
+const reclaimedStagingRoots = new Set<string>();
 const tempDirectoryRemovalOptions = {
   force: true,
   maxRetries: 3,
@@ -76,6 +80,66 @@ export function removeTempDirectory(
     onFailure?.(error);
     return recordTempDirectoryCleanup(tempDir, false);
   }
+}
+
+function isStagingOwnerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the PID was recycled by a process this user cannot signal;
+    // treat it as live so a foreign owner is never mistaken for an abandoned one.
+    return extractErrorCode(error) === "EPERM";
+  }
+}
+
+/**
+ * Removes snapshot staging directories left by processes that are already gone.
+ *
+ * Owner-driven cleanup cannot run when a process is terminated by a signal or
+ * lost with the host, so abandoned staging bytes would otherwise stay until
+ * something outside OpenClaw removed them. Reclaiming them when a new snapshot
+ * is staged keeps the recovery inside the owner that created them.
+ */
+export function reclaimAbandonedSqliteSnapshotStaging(stagingRoot: string): number {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(stagingRoot, { withFileTypes: true });
+  } catch {
+    // A missing or unreadable staging root has nothing to reclaim; snapshot
+    // creation reports its own failure.
+    return 0;
+  }
+  let reclaimed = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const owner = abandonedStagingEntry.exec(entry.name);
+    if (!owner) {
+      continue;
+    }
+    const ownerPid = Number(owner[1]);
+    if (!Number.isSafeInteger(ownerPid) || ownerPid <= 0) {
+      continue;
+    }
+    if (ownerPid === process.pid || isStagingOwnerAlive(ownerPid)) {
+      continue;
+    }
+    if (removeTempDirectory(path.join(stagingRoot, entry.name))) {
+      reclaimed += 1;
+    }
+  }
+  return reclaimed;
+}
+
+/** Reclaims abandoned staging once per root, before this process stages its own. */
+export function reclaimAbandonedSqliteSnapshotStagingOnce(stagingRoot: string): void {
+  if (reclaimedStagingRoots.has(stagingRoot)) {
+    return;
+  }
+  reclaimedStagingRoots.add(stagingRoot);
+  reclaimAbandonedSqliteSnapshotStaging(stagingRoot);
 }
 
 export async function removeTempDirectoryAsync(
