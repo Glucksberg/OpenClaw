@@ -1,0 +1,46 @@
+const previous = trigger.state && typeof trigger.state === "object" ? trigger.state : {};
+const helper = "/home/dev/.openclaw/releases/current/scripts/operations/ai-pulse-x-report.cjs";
+const outputOf = (result) => String(
+  result?.result?.details?.aggregated ??
+  result?.details?.aggregated ??
+  result?.output ??
+  "",
+).trim();
+
+let result;
+try {
+  const raw = outputOf(await tools.call("exec", {
+    command: `node ${helper} --batch-size 5`,
+    timeoutSeconds: 210,
+    workdir: "/home/dev/.openclaw/workspace-code-reviewer",
+    env: {
+      AI_PULSE_ARCHIVE_ROOT: "/home/dev/.openclaw/workspace-code-reviewer/tasks/ai-pulse/archive",
+      AI_PULSE_STATE_ROOT: "/home/dev/.openclaw/cron/bounded-ai-pulse",
+    },
+  }));
+  result = JSON.parse(raw);
+} catch (error) {
+  const message = String(error?.message ?? error).replace(/[\r\n\t]+/g, " ").slice(0, 240);
+  result = {
+    status: "partial",
+    report: `🗞️ AI Pulse — bounded execution failed; prior cursor=${previous.cursor ?? 0}. ${message}`,
+    runId: previous.runId ?? null,
+    cursor: previous.cursor ?? 0,
+    done: previous.done ?? 0,
+    remaining: previous.remaining ?? 5,
+    errors: [message],
+  };
+}
+
+return {
+  notify: String(result.report ?? "🗞️ AI Pulse — bounded execution returned no report.").slice(0, 12000),
+  state: {
+    version: 1,
+    status: result.status ?? "partial",
+    runId: result.runId ?? previous.runId ?? null,
+    cursor: Number(result.cursor ?? previous.cursor ?? 0),
+    done: Number(result.done ?? previous.done ?? 0),
+    remaining: Number(result.remaining ?? previous.remaining ?? 5),
+    errors: Array.isArray(result.errors) ? result.errors.slice(-12) : [],
+  },
+};
