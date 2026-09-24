@@ -3,8 +3,10 @@ import type { ConversationRecallContext } from "../agents/conversation-recall.ty
 import type { ToolFsPolicy } from "../agents/tool-fs-policy.types.js";
 import type { AnyAgentTool } from "../agents/tools/common.js";
 import type { ConversationReadInvocationOrigin } from "../channels/plugins/conversation-read-origin.js";
+import type { ChannelPresentationCapabilities } from "../channels/plugins/outbound.types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { HookEntry } from "../hooks/types.js";
+import type { MessagePresentation } from "../interactive/payload.js";
 import type { DeliveryContext } from "../utils/delivery-context.types.js";
 
 export type OpenClawPluginActiveModelContext = {
@@ -15,7 +17,13 @@ export type OpenClawPluginActiveModelContext = {
 
 /** Current-turn outbound delivery capability bound to the host-selected route and media policy. */
 export type OpenClawPluginToolDelivery = {
-  send: (params: { text?: string; mediaUrl?: string }) => Promise<void>;
+  /** Static capabilities of the host-bound channel route; dynamic features may be narrower. */
+  readonly presentationCapabilities?: Readonly<ChannelPresentationCapabilities>;
+  send: (params: {
+    text?: string;
+    mediaUrl?: string;
+    presentation?: MessagePresentation;
+  }) => Promise<void>;
 };
 
 /** Trusted execution context passed to plugin-owned agent tool factories. */

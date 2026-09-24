@@ -157,10 +157,23 @@ function createPluginToolDelivery(params: {
     requesterSenderUsername: bindingAuthorization.requesterSenderUsername,
     requesterSenderE164: bindingAuthorization.requesterSenderE164,
   });
+  // Expose only the channel's static baseline. Account/formatting-aware
+  // capabilities can be narrower at send time and remain owned by delivery.
+  const presentationCapabilities =
+    channelPlugin?.outbound?.renderPresentation &&
+    channelPlugin.outbound.presentationCapabilities?.supported === true
+      ? structuredClone(channelPlugin.outbound.presentationCapabilities)
+      : undefined;
 
   return {
-    send: async ({ text, mediaUrl }) => {
+    ...(presentationCapabilities ? { presentationCapabilities } : {}),
+    send: async ({ text, mediaUrl, presentation }) => {
       resolveAuthorization();
+      // The caller may retain/mutate its payload while runtime loading or media
+      // preparation awaits. Capture canonical input before the first await;
+      // channel adaptation and validation remain owned by the outbound pipeline.
+      const presentationSnapshot =
+        presentation === undefined ? undefined : structuredClone(presentation);
       const { runMessageAction } = await loadMessageActionRunner();
       const authorization = resolveAuthorization();
       const cfg = params.resolveConfig();
@@ -178,6 +191,7 @@ function createPluginToolDelivery(params: {
             ...(route.threadId != null ? { threadId: route.threadId } : {}),
             ...(text !== undefined ? { message: text } : {}),
             ...(mediaUrl !== undefined ? { mediaUrl } : {}),
+            ...(presentationSnapshot !== undefined ? { presentation: presentationSnapshot } : {}),
           },
           defaultAccountId: route.accountId,
           ...selectMessageActionRequesterIdentity(authorization),

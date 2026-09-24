@@ -161,6 +161,38 @@ account, thread, and local-media policy; plugins cannot retarget this helper,
 and retained copies stop working after the turn closes. The helper is unavailable
 for channels whose delivery is owned by a Gateway transport.
 
+`send` also accepts the canonical `presentation` payload. Gate workflows that
+require native controls on the bound channel's declared capability:
+
+```typescript
+const delivery = toolContext.delivery;
+if (!delivery?.presentationCapabilities?.buttons) {
+  throw new Error("This workflow requires native button delivery.");
+}
+await delivery.send({
+  text: "Review this draft.",
+  presentation: {
+    blocks: [
+      {
+        type: "buttons",
+        buttons: [{ label: "Review", action: { type: "callback", value: "draft:review" } }],
+      },
+    ],
+  },
+});
+```
+
+`presentationCapabilities` is the channel's static baseline for the host-bound
+route. Dynamic account or formatting capabilities can be narrower at send time.
+The outbound pipeline validates and adapts the payload using the current channel
+capabilities and limits. The host
+snapshots the presentation before asynchronous preparation, so subsequent caller
+mutations cannot change an in-flight send. Route, media access, and turn-lifetime
+restrictions are unchanged. Callback handlers must still authorize the action;
+rendering a button does not grant approval. Older hosts omit the flag; workflows
+that require interactive controls should check the specific capability and stop
+rather than silently send text only.
+
 A factory may return a core `AgentTool`, an array of them, or `null` or
 `undefined` to opt out, as the example above does. When it returns a concrete
 tool, that tool uses the core runtime signature

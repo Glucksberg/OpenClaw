@@ -21,6 +21,7 @@ import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../plugins/runtime.js";
 import { withPluginRuntimeRegistryScope } from "../plugins/runtime/gateway-request-scope.js";
 import { getPluginRuntimeLoadContext } from "../plugins/runtime/load-context.js";
+import type { OpenClawPluginToolDelivery } from "../plugins/tool-types.js";
 import { activateSecretsRuntimeSnapshot, clearSecretsRuntimeSnapshot } from "../secrets/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
 import {
@@ -163,7 +164,12 @@ describe("createOpenClawTools browser plugin integration", () => {
     expect(details.workspaceOnly).toBe(true);
   });
 
-  it.each(["agent:main:telegram:group:123", undefined])("binds delivery for %s", async (key) => {
+  const deliverySessions = [
+    "agent:main:telegram:group:123",
+    "agent:main:cron:editorial",
+    undefined,
+  ];
+  it.each(deliverySessions)("binds delivery for %s", async (key) => {
     const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-plugin-delivery-"));
     const mediaUrl = path.join(workspaceDir, "photo.png");
     const outsideMediaUrl = `${workspaceDir}-outside.png`;
@@ -208,8 +214,28 @@ describe("createOpenClawTools browser plugin integration", () => {
       id: "telegram",
       outbound: {
         deliveryMode: "direct",
+        presentationCapabilities: { supported: true, buttons: true },
+        renderPresentation: ({ payload, presentation }) => ({
+          ...payload,
+          channelData: {
+            telegram: {
+              buttons: presentation.blocks.flatMap((block) =>
+                block.type === "buttons"
+                  ? [
+                      block.buttons.map((button) => ({
+                        text: button.label,
+                        callback_data:
+                          button.action?.type === "callback" ? button.action.value : undefined,
+                      })),
+                    ]
+                  : [],
+              ),
+            },
+          },
+        }),
         sendText: async () => ({ channel: "telegram", messageId: "text-1" }),
         sendMedia,
+        sendPayload: (params) => sendMedia({ ...params, mediaUrl: params.payload.mediaUrl }),
       },
       messaging: {
         normalizeTarget: (raw) => raw,
@@ -259,11 +285,7 @@ describe("createOpenClawTools browser plugin integration", () => {
       plugins: { allow: ["telegram"] },
       tools: { fs: { workspaceOnly: true } },
     } as OpenClawConfig;
-    let delivery:
-      | {
-          send: (params: { text: string; mediaUrl?: string }) => Promise<void>;
-        }
-      | undefined;
+    let delivery: OpenClawPluginToolDelivery | undefined;
     hoisted.resolvePluginTools.mockImplementation((params: unknown) => {
       const context = (
         params as {
@@ -274,9 +296,7 @@ describe("createOpenClawTools browser plugin integration", () => {
               accountId?: string;
               threadId?: string | number;
             };
-            delivery?: {
-              send: (sendParams: { text: string; mediaUrl?: string }) => Promise<void>;
-            };
+            delivery?: OpenClawPluginToolDelivery;
           };
         }
       ).context;
@@ -313,9 +333,24 @@ describe("createOpenClawTools browser plugin integration", () => {
         throw new Error("expected plugin delivery capability");
       }
       const activeDelivery = delivery;
-      await withPluginRuntimeRegistryScope(createEmptyPluginRegistry(), () =>
-        activeDelivery.send({ text: "bound media", mediaUrl }),
+      expect(activeDelivery.presentationCapabilities).toEqual({ supported: true, buttons: true });
+      const control = {
+        label: "Approve agenda",
+        action: { type: "callback" as const, value: "radar:a:fixture:1:opaque" },
+      };
+      const sendInput = {
+        text: "bound media",
+        mediaUrl,
+        target: "attacker-chat",
+        accountId: "attacker-account",
+        presentation: { blocks: [{ type: "buttons" as const, buttons: [control] }] },
+      };
+      const sendWithControls = withPluginRuntimeRegistryScope(createEmptyPluginRegistry(), () =>
+        activeDelivery.send(sendInput),
       );
+      control.action.value = "attacker-callback";
+      control.label = "Altered after send";
+      await sendWithControls;
       expect(sendMedia).toHaveBeenCalledWith(
         expect.objectContaining({
           to: "123",
@@ -323,6 +358,13 @@ describe("createOpenClawTools browser plugin integration", () => {
           accountId: "work",
           threadId: "7",
           mediaLocalRoots: expect.arrayContaining([workspaceDir]),
+          payload: expect.objectContaining({
+            channelData: {
+              telegram: {
+                buttons: [[{ text: "Approve agenda", callback_data: "radar:a:fixture:1:opaque" }]],
+              },
+            },
+          }),
         }),
       );
       expect(providerNativeSend).not.toHaveBeenCalled();
@@ -333,7 +375,7 @@ describe("createOpenClawTools browser plugin integration", () => {
 
       deferTransportDispatch = true;
       const pending = withPluginRuntimeRegistryScope(createEmptyPluginRegistry(), () =>
-        activeDelivery.send({ text: "closing", mediaUrl }),
+        activeDelivery.send({ text: "closing", mediaUrl, presentation: sendInput.presentation }),
       );
       await transportDispatchStarted.promise;
       revokeMessageActionTurnCapability(turnCapability);
@@ -509,6 +551,49 @@ describe("createOpenClawTools browser plugin integration", () => {
         threadId: "7",
       });
       expect(context.delivery).toBeUndefined();
+    } finally {
+      revokeMessageActionTurnCapability(turnCapability);
+    }
+  });
+
+  it("does not advertise presentation capabilities for a plain-text direct channel", () => {
+    const plainPlugin = createOutboundTestPlugin({
+      id: "plain",
+      outbound: {
+        deliveryMode: "direct",
+        sendText: async () => ({ channel: "plain", messageId: "text-1" }),
+      },
+    });
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "plain", source: "test", plugin: plainPlugin }]),
+    );
+    const turnCapability = mintMessageActionTurnCapability({
+      agentId: "main",
+      runId: "run-1",
+      sessionKey: "agent:main:plain:direct:123",
+      sessionId: "session-1",
+      requesterSenderId: "sender-1",
+    });
+    try {
+      hoisted.resolvePluginTools.mockReturnValue([]);
+      createOpenClawTools({
+        config: {} as OpenClawConfig,
+        agentSessionKey: "agent:main:plain:direct:123",
+        runId: "run-1",
+        sessionId: "session-1",
+        agentChannel: "plain",
+        agentTo: "123",
+        requesterAgentIdOverride: "main",
+        messageActionTurnCapability: turnCapability,
+        disableMessageTool: true,
+      });
+      const delivery = (
+        firstResolvePluginToolsParams().context as {
+          delivery?: OpenClawPluginToolDelivery;
+        }
+      ).delivery;
+      expect(delivery).toBeDefined();
+      expect(delivery?.presentationCapabilities).toBeUndefined();
     } finally {
       revokeMessageActionTurnCapability(turnCapability);
     }
