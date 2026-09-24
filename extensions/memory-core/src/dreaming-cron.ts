@@ -32,12 +32,18 @@ const dreamingCronIdentifiers = {
   MANAGED_MEMORY_DREAMING_CRON_TAG,
   MEMORY_DREAMING_SYSTEM_EVENT_TEXT,
 } as const;
+const MANAGED_DREAMING_TIMEOUT_SECONDS = 300;
 
 type Logger = Pick<OpenClawPluginApi["logger"], "info" | "warn" | "error">;
 type ShortTermPromotionDreamingConfig = ReturnType<typeof resolveMemoryDeepDreamingConfig>;
 
 type CronSchedule = { kind: "cron"; expr: string; tz?: string };
-type CronPayload = { kind: "agentTurn"; message: string; lightContext?: boolean };
+type CronPayload = {
+  kind: "agentTurn";
+  message: string;
+  lightContext?: boolean;
+  timeoutSeconds?: number;
+};
 type ManagedCronJobCreate = {
   declarationKey: string;
   name: string;
@@ -71,6 +77,7 @@ type ManagedCronJobLike = {
     kind?: string;
     message?: string;
     lightContext?: boolean;
+    timeoutSeconds?: number;
   };
   delivery?: {
     mode?: string;
@@ -115,6 +122,7 @@ function buildManagedDreamingCronJob(
       kind: "agentTurn",
       message: MEMORY_DREAMING_SYSTEM_EVENT_TEXT,
       lightContext: true,
+      timeoutSeconds: MANAGED_DREAMING_TIMEOUT_SECONDS,
     },
     // Dreaming is a maintenance sweep, not a user-facing announce job.
     delivery: {
@@ -161,7 +169,8 @@ function buildManagedDreamingPatch(
 
   const payloadNeedsUpdate =
     normalizeOptionalString(job.payload?.message) !== desired.payload.message ||
-    job.payload?.lightContext !== desired.payload.lightContext;
+    job.payload?.lightContext !== desired.payload.lightContext ||
+    job.payload?.timeoutSeconds !== desired.payload.timeoutSeconds;
   if (payloadNeedsUpdate) {
     patch.payload = desired.payload;
   }
