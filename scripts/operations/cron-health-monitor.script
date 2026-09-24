@@ -1,0 +1,48 @@
+const previous = trigger.state && typeof trigger.state === "object" ? trigger.state : {};
+const helper = "/home/dev/.openclaw/releases/current/scripts/operations/cron-health-monitor.cjs";
+const outputOf = (result) => String(
+  result?.result?.details?.aggregated ??
+  result?.details?.aggregated ??
+  result?.output ??
+  "",
+).trim();
+
+let result;
+try {
+  const raw = outputOf(await tools.call("exec", {
+    command: `node ${helper} --batch-size 4`,
+    timeoutSeconds: 210,
+    workdir: "/home/dev/.openclaw/workspace-openclaw",
+    env: {
+      OPENCLAW_HEALTH_STATE_ROOT: "/home/dev/.openclaw/cron/bounded-health-monitor",
+      OPENCLAW_HEALTH_SNAPSHOT: "/home/dev/.openclaw/releases/current/scripts/operations/cron-health-snapshot.sh",
+    },
+  }));
+  result = JSON.parse(raw);
+} catch (error) {
+  const message = String(error?.message ?? error).replace(/[\r\n\t]+/g, " ").slice(0, 240);
+  result = {
+    status: "partial",
+    report: `OpenClaw health monitor partial; prior cursor=${previous.cursor ?? 0}. ${message}`,
+    runId: previous.runId ?? null,
+    cursor: previous.cursor ?? 0,
+    done: previous.done ?? 0,
+    remaining: previous.remaining ?? 8,
+    errors: [message],
+  };
+}
+
+return {
+  notify: String(result.report ?? "OpenClaw health monitor returned no report.").slice(0, 12000),
+  state: {
+    version: 1,
+    status: result.status ?? "partial",
+    runId: result.runId ?? previous.runId ?? null,
+    cursor: Number(result.cursor ?? previous.cursor ?? 0),
+    done: Number(result.done ?? previous.done ?? 0),
+    remaining: Number(result.remaining ?? previous.remaining ?? 8),
+    errors: Array.isArray(result.errors) ? result.errors.slice(-16) : [],
+    attempts: result.attempts && typeof result.attempts === "object" ? result.attempts : {},
+    deadLetters: Array.isArray(result.deadLetters) ? result.deadLetters.slice(-8) : [],
+  },
+};
