@@ -12,12 +12,12 @@ import {
   uniqueStrings,
 } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { peekSystemEventEntries } from "openclaw/plugin-sdk/system-event-runtime";
+import { probeDreamingAdmission } from "./dreaming-admission.js";
 import {
   type CronServiceLike,
   reconcileShortTermDreamingCronJob,
   resolveCronServiceFromGatewayContext,
 } from "./dreaming-cron.js";
-import { probeDreamingAdmission } from "./dreaming-admission.js";
 import { selectDeepPromotionGroup } from "./dreaming-deep-budget.js";
 import { appendFailedDreamingEvent } from "./dreaming-events.js";
 import {
@@ -25,7 +25,6 @@ import {
   formatRecallRepairDetails,
   includesSystemEventToken,
 } from "./dreaming-shared.js";
-import { resolveMemoryPromotionFileMaxChars } from "./memory-budget.js";
 import {
   acquireDreamingSweepLeaseGuard,
   advanceDreamingSweepProgress,
@@ -34,6 +33,7 @@ import {
   readDreamingSweepProgress,
   selectDreamingWorkspaceBatch,
 } from "./dreaming-sweep-budget.js";
+import { resolveMemoryPromotionFileMaxChars } from "./memory-budget.js";
 
 const RUNTIME_CRON_RECONCILE_INTERVAL_MS = 60_000;
 const HEARTBEAT_ISOLATED_SESSION_SUFFIX = ":heartbeat";
