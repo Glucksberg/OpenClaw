@@ -469,6 +469,42 @@ describe("cron timer outcome and failure policy regressions", () => {
     },
   );
 
+  it("does not retry a scheduler hard timeout after agent execution starts", () => {
+    const startedAt = Date.parse("2026-07-21T12:00:00.000Z");
+    const endedAt = startedAt + 60_000;
+    const job = createIsolatedRegressionJob({
+      id: "post-execution-hard-timeout",
+      name: "post-execution-hard-timeout",
+      scheduledAt: startedAt,
+      schedule: { kind: "at", at: new Date(startedAt).toISOString() },
+      payload: { kind: "agentTurn", message: "work" },
+      state: { runningAtMs: startedAt },
+    });
+    const state = createRunningCronServiceState({
+      storePath: "/tmp/cron-post-execution-hard-timeout.json",
+      log: noopLogger,
+      nowMs: () => endedAt,
+      jobs: [job],
+    });
+
+    applyJobResult(
+      state,
+      job,
+      {
+        status: "error",
+        error: "cron: job execution timed out (last phase: tool-execution-started)",
+        executionStarted: true,
+        startedAt,
+        endedAt,
+      },
+      { deferredNotifications: [] },
+    );
+
+    expect(job.state.lastErrorReason).toBe("timeout");
+    expect(job.state.nextRunAtMs).toBeUndefined();
+    expect(job.enabled).toBe(false);
+  });
+
   it("persists and warns with last cron run diagnostics", () => {
     const startedAt = Date.parse("2026-04-14T12:00:00.000Z");
     const endedAt = startedAt + 500;
