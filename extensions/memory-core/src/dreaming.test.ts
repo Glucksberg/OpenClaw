@@ -97,6 +97,10 @@ beforeEach(() => {
   configureMemoryCoreDreamingState(((options: { namespace: string }) => {
     const values = stores.get(options.namespace) ?? new Map<string, unknown>();
     stores.set(options.namespace, values);
+    const versions = new Map<string, number>();
+    const bump = (key: string): void => {
+      versions.set(key, (versions.get(key) ?? 0) + 1);
+    };
     return {
       register: vi.fn(async (key: string, value: unknown) => void values.set(key, value)),
       registerIfAbsent: vi.fn(async (key: string, value: unknown) => {
@@ -107,6 +111,43 @@ beforeEach(() => {
         return true;
       }),
       lookup: vi.fn(async (key: string) => values.get(key)),
+      observe: vi.fn(async (key: string) => ({
+        value: values.get(key),
+        comparison: String(versions.get(key) ?? 0),
+      })),
+      compareAndApply: vi.fn(
+        async (
+          key: string,
+          comparison: string,
+          intent: {
+            operation: "update" | "delete";
+            action: "set" | "keep" | "delete";
+            value?: unknown;
+          },
+        ) => {
+          const currentComparison = String(versions.get(key) ?? 0);
+          const current = {
+            value: values.get(key),
+            comparison: currentComparison,
+          };
+          if (comparison !== currentComparison) {
+            return { status: "conflict", current };
+          }
+          if (intent.action === "keep") {
+            return { status: "unchanged" };
+          }
+          if (intent.action === "delete") {
+            const deleted = values.delete(key);
+            if (deleted) {
+              bump(key);
+            }
+            return { status: deleted ? "applied" : "unchanged" };
+          }
+          values.set(key, intent.value);
+          bump(key);
+          return { status: "applied" };
+        },
+      ),
       delete: vi.fn(async (key: string) => values.delete(key)),
       deleteIf: vi.fn(async (key: string, predicate: (value: unknown) => boolean) => {
         const value = values.get(key);
@@ -1547,10 +1588,13 @@ describe("dreaming service reconciliation", () => {
       registerShortTermPromotionDreamingForTest(api);
       await triggerDreamingServiceStart(api, { config: api.config, getCron: () => harness.cron });
       const payload = requireAgentTurnPayload(requireAddCall(harness, 0).payload);
-      await getBeforeAgentReplyHandler(api.on)(
-        { cleanedBody: payload.message },
-        { trigger: "cron", agentId: "main", workspaceDir },
-      );
+      const run = getBeforeAgentReplyHandler(api.on);
+      for (let phaseAttempt = 0; phaseAttempt < 3; phaseAttempt += 1) {
+        await run(
+          { cleanedBody: payload.message },
+          { trigger: "cron", agentId: "main", workspaceDir },
+        );
+      }
       expect(logger.error).not.toHaveBeenCalled();
       const reportDir = path.join(workspaceDir, "memory", "dreaming", "deep");
       const reports = await fs.readdir(reportDir);
@@ -1560,7 +1604,7 @@ describe("dreaming service reconciliation", () => {
         "utf-8",
       );
       expect(report).toContain(
-        `- Ranked ${rejected + promoted} candidate(s) for durable promotion.`,
+        `- Ranked ${rejected + promoted} candidate(s); selected deep group 1/1.`,
       );
       expect(report).toContain(`- Promoted ${promoted} candidate(s) into MEMORY.md.`);
       expect(report).toContain(
@@ -1686,10 +1730,13 @@ describe("dreaming service reconciliation", () => {
         });
         registerShortTermPromotionDreamingForTest(api);
         await triggerDreamingServiceStart(api, { config: api.config, getCron: () => harness.cron });
-        await getBeforeAgentReplyHandler(api.on)(
-          { cleanedBody: constants.DREAMING_SYSTEM_EVENT_TEXT },
-          { trigger: "cron", agentId: "main", workspaceDir },
-        );
+        const run = getBeforeAgentReplyHandler(api.on);
+        for (let phaseAttempt = 0; phaseAttempt < 3; phaseAttempt += 1) {
+          await run(
+            { cleanedBody: constants.DREAMING_SYSTEM_EVENT_TEXT },
+            { trigger: "cron", agentId: "main", workspaceDir },
+          );
+        }
         expect(logger.error).not.toHaveBeenCalled();
         const summaryLines = mockStringMessages(logger.info).filter((line) =>
           line.startsWith("memory-core: normalized recall artifacts before dreaming"),
