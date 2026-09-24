@@ -345,6 +345,19 @@ async function runShortTermDreamingPromotionIfTriggered(params: {
           `memory-core: dreaming applied details [workspace=${workspaceDir}] ${appliedSummary}`,
         );
       }
+      if (applied.rejectedCandidates.length > 0) {
+        const rejectionCounts = new Map<string, number>();
+        for (const { category } of applied.rejectedCandidates) {
+          rejectionCounts.set(category, (rejectionCounts.get(category) ?? 0) + 1);
+        }
+        const summary = [...rejectionCounts]
+          .toSorted(([left], [right]) => left.localeCompare(right))
+          .map(([category, count]) => `${category}: ${count}`)
+          .join(", ");
+        reportLines.push(
+          `- Not promoted: ${applied.rejectedCandidates.length} candidate(s) (${summary}).`,
+        );
+      }
       const hasReportableRejections = applied.rejectedCandidates.some(
         ({ category }) => category !== "memory budget",
       );
