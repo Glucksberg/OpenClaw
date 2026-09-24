@@ -957,6 +957,12 @@
       ],
       "openclaw/plugin-sdk/secret-egress-runtime": [
         "../packages/plugin-sdk/dist/src/plugin-sdk/secret-egress-runtime.d.ts"
+      ],
+      "openclaw/plugin-sdk/websocket-runtime": [
+        "../packages/plugin-sdk/dist/src/plugin-sdk/websocket-runtime.d.ts"
+      ],
+      "openclaw/plugin-sdk/gateway-health-runtime": [
+        "../packages/plugin-sdk/dist/src/plugin-sdk/gateway-health-runtime.d.ts"
       ]
     }
   }
