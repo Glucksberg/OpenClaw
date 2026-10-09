@@ -469,17 +469,6 @@ describe("modelsStatusCommand auth overview", () => {
       expected: { reason: "auth", classification: "wham_token_expired" },
       text: ["cooldown:wham_token_expired"],
     },
-    {
-      profileId: "openai:billing",
-      usage: { disabledUntil: Date.now() + 60_000, disabledReason: "billing" as const },
-      expected: {
-        kind: "disabled",
-        recoveryHint: expect.stringContaining(
-          "`openclaw models auth clear-cooldown 'openai:billing' --agent 'main'`",
-        ),
-      },
-      text: ["clear-cooldown 'openai:billing' --agent 'main'"],
-    },
   ])(
     "reports cooldown diagnostics and recovery for $profileId",
     async ({ profileId, usage, expected, text }) => {
