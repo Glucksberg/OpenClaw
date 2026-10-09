@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuthProfileStore } from "./types.js";
 import { clearAuthProfileCooldown } from "./usage-owner-write.js";
 
-vi.mock("./store-runtime.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./store-runtime.js")>()),
+// mock-isolation: the unit only reaches the locked writer; the full store runtime graph is unrelated.
+vi.mock("./store-runtime.js", () => ({
   updateAuthProfileStoreWithLock: vi.fn(async () => null),
 }));
 

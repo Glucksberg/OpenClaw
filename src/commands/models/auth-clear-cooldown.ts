@@ -7,7 +7,7 @@ import { refreshRunningGatewayAuthState } from "./auth-refresh.js";
 import { loadModelsConfig } from "./load-config.js";
 import { resolveModelsTargetAgent } from "./shared.js";
 
-/** Clears cooldown, block, and disable windows for one saved profile without touching credentials. */
+/** Clears cooldown, block, and disable windows for one profile or inline key without touching credentials. */
 export async function modelsAuthClearCooldownCommand(
   opts: { profileId: string; agent?: string },
   runtime: RuntimeEnv,
@@ -16,7 +16,10 @@ export async function modelsAuthClearCooldownCommand(
   const cfg = await loadModelsConfig({ commandName: "models auth clear-cooldown", runtime });
   const { agentId, agentDir } = resolveModelsTargetAgent(cfg, opts.agent, { kind: "mutation" });
   const store = ensureAuthProfileStore(agentDir);
-  if (!Object.hasOwn(store.profiles, profileId)) {
+  // Configured inline API keys have health records but no saved profile row.
+  const isInlineKeyRecord =
+    profileId.startsWith("inline-api-key:") && Object.hasOwn(store.usageStats ?? {}, profileId);
+  if (!Object.hasOwn(store.profiles, profileId) && !isInlineKeyRecord) {
     throw new Error(
       `Auth profile "${profileId}" not found. Run ${formatCliCommand("openclaw models auth list")} to see saved profiles.`,
     );

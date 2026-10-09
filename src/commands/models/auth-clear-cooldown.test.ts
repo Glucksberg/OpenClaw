@@ -88,7 +88,24 @@ describe("models auth clear-cooldown", () => {
     expect(runtime.logs).toContain(`Cleared cooldown state for auth profile "${profileId}".`);
   });
 
-  it.each(["anthropic:missing", "constructor"])(
+  it("accepts a configured inline API key that has only a health record", async () => {
+    const inlineId = "inline-api-key:anthropic";
+    mocks.ensureAuthProfileStore.mockReturnValue({
+      version: 1,
+      profiles: {},
+      usageStats: {
+        [inlineId]: { disabledUntil: Date.now() + 3_600_000, disabledReason: "billing" },
+      },
+    } satisfies AuthProfileStore);
+
+    await modelsAuthClearCooldownCommand({ profileId: inlineId }, createRuntime());
+
+    expect(mocks.clearAuthProfileCooldown).toHaveBeenCalledWith(
+      expect.objectContaining({ profileId: inlineId }),
+    );
+  });
+
+  it.each(["anthropic:missing", "constructor", "inline-api-key:openai"])(
     "rejects unknown profile id %s without writing",
     async (missingProfileId) => {
       await expect(

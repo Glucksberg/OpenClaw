@@ -450,6 +450,11 @@ export function classifyOAuthRefreshFailureError(err: unknown): OAuthRefreshFail
   return rawFallback;
 }
 
+function formatAgentOption(agentId: string | undefined): string {
+  const sanitized = agentId ? sanitizeForLog(agentId).trim() : undefined;
+  return sanitized ? ` --agent ${quoteShellArg(sanitized)}` : "";
+}
+
 /** Build the login command operators should run after OAuth refresh failure. */
 export function buildOAuthRefreshFailureLoginCommand(
   provider: string | null | undefined,
@@ -462,8 +467,7 @@ export function buildOAuthRefreshFailureLoginCommand(
     );
   }
   const sanitizedProfileId = sanitizeOAuthRefreshFailureProfileId(options?.profileId);
-  const agentId = options?.agentId ? sanitizeForLog(options.agentId).trim() : undefined;
-  const agentOption = agentId ? ` --agent ${quoteShellArg(agentId)}` : "";
+  const agentOption = formatAgentOption(options?.agentId);
   const profileOption = sanitizedProfileId
     ? ` --profile-id ${quoteShellArg(sanitizedProfileId)}`
     : "";
@@ -488,6 +492,8 @@ export function buildAuthProfileUnusableHint(params: {
   reason?: AuthProfileFailureReason;
   provider: string;
   profileId: string;
+  /** Store owner; mutation commands require it when several agents are configured. */
+  agentId?: string;
 }): string {
   if (
     params.reason === "auth" ||
@@ -511,7 +517,7 @@ export function buildAuthProfileUnusableHint(params: {
       return "Top up credits (provider billing) or switch provider.";
     }
     const command = formatCliCommand(
-      `openclaw models auth clear-cooldown ${quoteShellArg(profileId)}`,
+      `openclaw models auth clear-cooldown ${quoteShellArg(profileId)}${formatAgentOption(params.agentId)}`,
     );
     return `Top up credits (provider billing), then run ${formatOAuthRefreshFailureLoginCommandMarkdown(command)}, or switch provider.`;
   }

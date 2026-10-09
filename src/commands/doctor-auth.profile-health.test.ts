@@ -165,7 +165,7 @@ describe("noteAuthProfileHealth", () => {
         path: expectedAuthStorePath(mainDir),
         target: "openai:billing",
         fixHint:
-          "Top up credits (provider billing), then run `openclaw models auth clear-cooldown 'openai:billing'`, or switch provider.",
+          "Top up credits (provider billing), then run `openclaw models auth clear-cooldown 'openai:billing' --agent 'main'`, or switch provider.",
       }),
     ]);
   });
