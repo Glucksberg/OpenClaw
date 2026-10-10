@@ -251,8 +251,10 @@ export async function modelsStatusCommand(
   const explicitAgentId = opts.agent?.trim();
   const envAgentDir =
     process.env.OPENCLAW_AGENT_DIR?.trim() || process.env.PI_CODING_AGENT_DIR?.trim();
+  const agentDirOverride =
+    !explicitAgentId && envAgentDir ? resolveUserPath(envAgentDir) : undefined;
   const { agentId: workspaceAgentId, agentDir } = resolveModelsTargetAgent(cfg, opts.agent, {
-    agentDirOverride: !explicitAgentId && envAgentDir ? resolveUserPath(envAgentDir) : undefined,
+    agentDirOverride,
     kind: "read",
   });
   // Only an explicit --agent narrows the reported model/fallback overrides; an inferred
@@ -1046,7 +1048,11 @@ export async function modelsStatusCommand(
         (profile) => profile.type === "oauth" || profile.type === "token",
       );
 
-      const unusableProfiles = listUnusableAuthProfilesWithHints(store, workspaceAgentId);
+      // Mutation commands ignore the env dir override, so no --agent reaches that store.
+      const unusableProfiles = listUnusableAuthProfilesWithHints(
+        store,
+        agentDirOverride ? null : workspaceAgentId,
+      );
 
       const checkStatus = (() => {
         type RequirementHealth = "ok" | "expiring" | "missing" | "indeterminate";
