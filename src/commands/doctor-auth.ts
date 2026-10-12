@@ -228,6 +228,11 @@ function listAuthProfileHealthTargets(cfg: OpenClawConfig): AuthProfileHealthTar
       targets.set(databasePath, { label: `Agent ${agentId}`, agentDir, agentId });
     }
   }
+  // Custom rosters need not contain the shared owner. Every configured agent inherits the
+  // shared store and owner routing writes it, so any of them is a reachable target.
+  if (shared && !shared.agentId) {
+    shared.agentId = listAgentIds(cfg)[0];
+  }
 
   return [...targets.values()];
 }

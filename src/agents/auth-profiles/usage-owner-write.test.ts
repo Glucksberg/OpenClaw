@@ -4,6 +4,7 @@ import { clearAuthProfileCooldown } from "./usage-owner-write.js";
 
 // mock-isolation: the unit only reaches the locked writer; the full store runtime graph is unrelated.
 vi.mock("./store-runtime.js", () => ({
+  resolvePersistedAuthProfileOwnerAgentDirAsync: vi.fn(async () => undefined),
   updateAuthProfileStoreWithLock: vi.fn(async () => null),
 }));
 

@@ -203,6 +203,28 @@ describe("noteAuthProfileHealth", () => {
     ]);
   });
 
+  it("falls back to a configured agent when no agent owns the shared state-db store", async () => {
+    authProfileMocks.sharedAuthStorePath = path.join(tempDir, "state", "openclaw.sqlite");
+    authProfileMocks.hasAnyAuthProfileStoreSource.mockReturnValue(true);
+    authProfileMocks.loadAuthProfileStoreForRuntime.mockReturnValue({
+      version: 1,
+      profiles: {},
+      usageStats: {
+        "openai:billing": { disabledUntil: now + 5 * 60_000, disabledReason: "billing" },
+      },
+    } satisfies AuthProfileStore);
+
+    const findings = await collectAuthProfileHealthFindings({
+      cfg: { agents: { entries: { coder: {}, reviewer: {} } } },
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        fixHint: expect.stringContaining("clear-cooldown 'openai:billing' --agent 'coder'`"),
+      }),
+    ]);
+  });
+
   it("shows exact WHAM classification while retaining canonical recovery policy", async () => {
     authProfileMocks.hasLocalAuthProfileStoreSource.mockImplementation(
       (agentDir) => agentDir !== undefined,
